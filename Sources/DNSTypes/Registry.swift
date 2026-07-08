@@ -84,6 +84,8 @@ enum RRRegistry {
             RRType.any.rawValue: d(ANY.self),
             RRType.nxname.rawValue: d(NXNAME.self),
             RRType.opt.rawValue: d(OPT.self),
+            RRType.svcb.rawValue: d(SVCB.self),
+            RRType.https.rawValue: d(HTTPS.self),
         ]
     }()
 

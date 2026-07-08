@@ -89,6 +89,23 @@ func main() {
 	}
 	out["OPT"] = hexOf(opt)
 
+	svcb := &dns.SVCB{Hdr: h(dns.TypeSVCB), Priority: 1, Target: "svc.example.com."}
+	svcb.Value = []dns.SVCBKeyValue{
+		&dns.SVCBMandatory{Code: []dns.SVCBKey{dns.SVCB_ALPN, dns.SVCB_IPV4HINT}},
+		&dns.SVCBAlpn{Alpn: []string{"h2", "h3"}},
+		&dns.SVCBPort{Port: 443},
+		&dns.SVCBIPv4Hint{Hint: []net.IP{net.ParseIP("192.0.2.1"), net.ParseIP("192.0.2.2")}},
+		&dns.SVCBECHConfig{ECH: []byte{0xAB, 0xCD}},
+		&dns.SVCBIPv6Hint{Hint: []net.IP{net.ParseIP("2001:db8::1")}},
+		&dns.SVCBDoHPath{Template: "/dns-query{?dns}"},
+		&dns.SVCBLocal{KeyCode: 65280, Data: []byte("xyz")},
+	}
+	out["SVCB"] = hexOf(svcb)
+
+	https := &dns.HTTPS{SVCB: dns.SVCB{Hdr: h(dns.TypeHTTPS), Priority: 0, Target: "."}}
+	https.Value = []dns.SVCBKeyValue{&dns.SVCBAlpn{Alpn: []string{"h3"}}}
+	out["HTTPS"] = hexOf(https)
+
 	writeJSON("Tests/DNSTypesTests/oracle.json", out)
 
 	// Full messages: emit both compressed and uncompressed wire bytes. The

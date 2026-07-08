@@ -57,6 +57,19 @@ final class DifferentialTests: XCTestCase {
                 EDNS0_TCP_KEEPALIVE(timeout: 100),
                 EDNS0_EXPIRE(expire: 86400),
             ]),
+            "SVCB": SVCB(header: hdr(.svcb), priority: 1, target: Name("svc.example.com."), values: [
+                SVCBMandatory(codes: [SVCBKey.alpn, SVCBKey.ipv4hint]),
+                SVCBAlpn(alpn: ["h2", "h3"]),
+                SVCBPort(port: 443),
+                SVCBIPv4Hint(hints: [IPv4Address("192.0.2.1"), IPv4Address("192.0.2.2")]),
+                SVCBECHConfig(ech: [0xAB, 0xCD]),
+                SVCBIPv6Hint(hints: [IPv6Address("2001:db8::1")]),
+                SVCBDoHPath(template: "/dns-query{?dns}"),
+                SVCBLocal(key: 65280, data: Array("xyz".utf8)),
+            ]),
+            "HTTPS": HTTPS(header: hdr(.https), priority: 0, target: Name("."), values: [
+                SVCBAlpn(alpn: ["h3"]),
+            ]),
         ]
     }
 
