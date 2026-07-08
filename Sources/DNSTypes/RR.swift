@@ -143,6 +143,13 @@ extension RR {
         buf.patchUInt16(at: lenSlot, UInt16(rdlen))
     }
 
+    /// Full wire bytes of this record, optionally with name compression.
+    public func packedBytes(compress: Bool = true) throws -> [UInt8] {
+        var buf = MessagePacker(compressionEnabled: compress)
+        try pack(into: &buf)
+        return buf.bytes
+    }
+
     /// Unpacks a full record of this concrete type from the cursor and verifies
     /// that the rdata consumed matches the declared RDLENGTH.
     public static func unpack(from buf: inout MessageUnpacker) throws -> Self {

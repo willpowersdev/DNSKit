@@ -5,8 +5,12 @@ public struct MessagePacker: Sendable {
     public private(set) var bytes: [UInt8] = []
     /// Maps lowercased presentation names to their absolute offset in `bytes`.
     private var compression: [String: Int] = [:]
+    /// When false, `appendName` never emits or records compression pointers.
+    public var compressionEnabled: Bool
 
-    public init() {}
+    public init(compressionEnabled: Bool = true) {
+        self.compressionEnabled = compressionEnabled
+    }
 
     public var count: Int { bytes.count }
 
@@ -74,16 +78,17 @@ public struct MessagePacker: Sendable {
         let wireLen = labels.reduce(1) { $0 + 1 + $1.count }
         guard wireLen <= 255 else { throw WireError.nameTooLong }
 
+        let doCompress = compress && compressionEnabled
         var idx = 0
         while idx < labels.count {
             let suffix = Name.from(labels: Array(labels[idx...])).value.lowercased()
-            if let ptr = compression[suffix] {
+            if doCompress, let ptr = compression[suffix] {
                 bytes.append(UInt8(0xC0 | UInt8(ptr >> 8)))
                 bytes.append(UInt8(ptr & 0xff))
                 return
             }
             let here = bytes.count
-            if compress && here <= 0x3FFF {
+            if doCompress && here <= 0x3FFF {
                 compression[suffix] = here
             }
             let label = labels[idx]
