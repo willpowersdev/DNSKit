@@ -86,6 +86,7 @@ enum RRRegistry {
             RRType.opt.rawValue: d(OPT.self),
             RRType.svcb.rawValue: d(SVCB.self),
             RRType.https.rawValue: d(HTTPS.self),
+            RRType.tsig.rawValue: d(TSIG.self),
         ]
     }()
 

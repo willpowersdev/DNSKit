@@ -54,6 +54,7 @@ let package = Package(
         .target(name: "DNSSEC", dependencies: [
             "DNSCore", "DNSTypes",
             .product(name: "Crypto", package: "swift-crypto"),
+            .product(name: "_CryptoExtras", package: "swift-crypto"),
         ]),
 
         .testTarget(name: "DNSCoreTests", dependencies: ["DNSCore"]),
@@ -71,6 +72,7 @@ let package = Package(
         .testTarget(name: "DNSSECTests", dependencies: [
             "DNSSEC", "DNSCore", "DNSTypes",
             .product(name: "Crypto", package: "swift-crypto"),
+            .product(name: "_CryptoExtras", package: "swift-crypto"),
         ]),
     ]
 )

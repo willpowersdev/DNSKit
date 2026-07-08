@@ -150,7 +150,31 @@ public struct DNSRecordMacro: MemberMacro {
         }
         """
 
-        return [memberwiseInit, packRdata, rdataInit, rdataPresentation, tokenInit]
+        // Canonical form (RFC 4034 §6.2): a copy with rdata domain names
+        // lowercased. Used by DNSSEC signing for the name-bearing RR types.
+        let nameFields = rdataFields.filter { $0.type == "Name" || $0.type == "[Name]" }
+        let lowerBody: String
+        if nameFields.isEmpty {
+            lowerBody = "return self"
+        } else {
+            var lines = ["var _c = self"]
+            for f in nameFields {
+                if f.type == "Name" {
+                    lines.append("_c.\(f.name) = Name(self.\(f.name).value.lowercased())")
+                } else {
+                    lines.append("_c.\(f.name) = self.\(f.name).map { Name($0.value.lowercased()) }")
+                }
+            }
+            lines.append("return _c")
+            lowerBody = lines.joined(separator: "\n        ")
+        }
+        let lowerNames: DeclSyntax = """
+        public func withLowercasedNames() -> Self {
+            \(raw: lowerBody)
+        }
+        """
+
+        return [memberwiseInit, packRdata, rdataInit, rdataPresentation, tokenInit, lowerNames]
     }
 
     /// Swift expression producing the presentation string for one field.

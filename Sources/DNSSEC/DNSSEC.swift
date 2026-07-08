@@ -1,5 +1,6 @@
 import Foundation
 import Crypto
+import _CryptoExtras
 import DNSCore
 import DNSTypes
 
@@ -26,6 +27,8 @@ public enum DNSSECError: Error, Sendable, Equatable {
     case badPublicKey
     case badSignature
     case emptyRRset
+    case tsigNotFound
+    case tsigUnknownAlgorithm(String)
 }
 
 public enum DNSSEC {
@@ -66,9 +69,12 @@ public enum DNSSEC {
     /// (without the signature) followed by the canonical, sorted RRset. Each RR
     /// uses the RRSIG's original TTL and canonical (lowercased) owner name.
     ///
-    /// Note: rdata-embedded domain names are not yet lowercased, so signing/
-    /// verifying is currently correct for rdata without domain names
-    /// (A, AAAA, TXT, DS, ...). Name-bearing rdata is a follow-up.
+    /// RR types whose rdata domain names are lowercased in canonical form
+    /// (RFC 4034 §6.2, as narrowed by RFC 6840 §5.1).
+    private static let downcaseTypes: Set<UInt16> = [
+        2, 3, 4, 5, 6, 7, 8, 9, 12, 14, 15, 17, 18, 21, 24, 26, 30, 33, 35, 36, 39,
+    ]
+
     public static func signingData(rrsig: RRSIG, rrset: [any RR]) throws -> [UInt8] {
         guard !rrset.isEmpty else { throw DNSSECError.emptyRRset }
 
@@ -91,8 +97,10 @@ public enum DNSSEC {
             e.appendUInt16(rr.header.type.rawValue)
             e.appendUInt16(rr.header.class.rawValue)
             e.appendUInt32(rrsig.origTtl)
+            // Canonicalize rdata domain names for the RFC 4034 §6.2 types.
+            let canon = downcaseTypes.contains(rr.header.type.rawValue) ? rr.withLowercasedNames() : rr
             var rd = MessagePacker(compressionEnabled: false)
-            try rr.packRdata(into: &rd)
+            try canon.packRdata(into: &rd)
             e.appendUInt16(UInt16(rd.count))
             e.appendBytes(rd.bytes)
             entries.append(e.bytes)
@@ -117,8 +125,39 @@ public enum DNSSEC {
         case DNSSECAlgorithm.ed25519:
             let pub = try Curve25519.Signing.PublicKey(rawRepresentation: Data(key.publicKey))
             return pub.isValidSignature(Data(rrsig.signature), for: data)
+        case DNSSECAlgorithm.rsaSHA256:
+            let pub = try rsaPublicKey(fromDNSKEY: key.publicKey)
+            let sig = _RSA.Signing.RSASignature(rawRepresentation: Data(rrsig.signature))
+            return pub.isValidSignature(sig, for: SHA256.hash(data: data), padding: .insecurePKCS1v1_5)
+        case DNSSECAlgorithm.rsaSHA512:
+            let pub = try rsaPublicKey(fromDNSKEY: key.publicKey)
+            let sig = _RSA.Signing.RSASignature(rawRepresentation: Data(rrsig.signature))
+            return pub.isValidSignature(sig, for: SHA512.hash(data: data), padding: .insecurePKCS1v1_5)
         default:
             throw DNSSECError.unsupportedAlgorithm(rrsig.algorithm)
+        }
+    }
+
+    /// Parses an RSA public key from DNSKEY rdata (RFC 3110): a 1- or 3-octet
+    /// exponent length, the exponent, then the modulus.
+    static func rsaPublicKey(fromDNSKEY key: [UInt8]) throws -> _RSA.Signing.PublicKey {
+        guard !key.isEmpty else { throw DNSSECError.badPublicKey }
+        var i = 0
+        let expLen: Int
+        if key[0] == 0 {
+            guard key.count >= 3 else { throw DNSSECError.badPublicKey }
+            expLen = Int(key[1]) << 8 | Int(key[2]); i = 3
+        } else {
+            expLen = Int(key[0]); i = 1
+        }
+        guard expLen > 0, i + expLen < key.count else { throw DNSSECError.badPublicKey }
+        let e = Array(key[i..<i + expLen])
+        let n = Array(key[(i + expLen)...])
+        guard !n.isEmpty else { throw DNSSECError.badPublicKey }
+        do {
+            return try _RSA.Signing.PublicKey(n: n, e: e)
+        } catch {
+            throw DNSSECError.badPublicKey
         }
     }
 
@@ -172,5 +211,34 @@ public struct P384Signer: DNSSECSigner {
     public var publicKey: [UInt8] { Array(privateKey.publicKey.rawRepresentation) }
     public func signature(over data: [UInt8]) throws -> [UInt8] {
         Array(try privateKey.signature(for: Data(data)).rawRepresentation)
+    }
+}
+
+public struct RSASigner: DNSSECSigner {
+    public let privateKey: _RSA.Signing.PrivateKey
+    public let sha512: Bool
+    public init(_ key: _RSA.Signing.PrivateKey, sha512: Bool = false) {
+        self.privateKey = key; self.sha512 = sha512
+    }
+    public var algorithm: UInt8 { sha512 ? DNSSECAlgorithm.rsaSHA512 : DNSSECAlgorithm.rsaSHA256 }
+
+    /// The public key in RFC 3110 wire form (exponent length, exponent, modulus).
+    public var publicKey: [UInt8] {
+        guard let prims = try? privateKey.publicKey.getKeyPrimitives() else { return [] }
+        let e = Array(prims.publicExponent), n = Array(prims.modulus)
+        var out: [UInt8] = []
+        if e.count <= 255 {
+            out.append(UInt8(e.count))
+        } else {
+            out.append(0); out.append(UInt8(e.count >> 8)); out.append(UInt8(e.count & 0xff))
+        }
+        out += e; out += n
+        return out
+    }
+    public func signature(over data: [UInt8]) throws -> [UInt8] {
+        let sig = sha512
+            ? try privateKey.signature(for: SHA512.hash(data: Data(data)), padding: .insecurePKCS1v1_5)
+            : try privateKey.signature(for: SHA256.hash(data: Data(data)), padding: .insecurePKCS1v1_5)
+        return Array(sig.rawRepresentation)
     }
 }

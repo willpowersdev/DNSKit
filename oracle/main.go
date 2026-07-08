@@ -208,6 +208,7 @@ func main() {
 		{dns.ECDSAP256SHA256, 256},
 		{dns.ECDSAP384SHA384, 384},
 		{dns.ED25519, 256},
+		{dns.RSASHA256, 2048},
 	}
 	var dvecs []dnssecVec
 	for _, ab := range algs {
@@ -231,7 +232,44 @@ func main() {
 			Rrset: []string{hexOf(a1), hexOf(a2)}, Ds: hexOf(ds), KeyTag: key.KeyTag(),
 		})
 	}
+	// Name-bearing RRset (MX, with mixed-case target names) to exercise the
+	// RFC 4034 §6.2 canonical-form lowercasing.
+	mxKey := &dns.DNSKEY{Hdr: rh("example.com.", dns.TypeDNSKEY, 3600), Flags: 257, Protocol: 3, Algorithm: dns.ECDSAP256SHA256}
+	mxPriv, err := mxKey.Generate(256)
+	if err != nil {
+		panic(err)
+	}
+	mx1 := &dns.MX{Hdr: rh("example.com.", dns.TypeMX, 3600), Preference: 10, Mx: "Mail.EXAMPLE.com."}
+	mx2 := &dns.MX{Hdr: rh("example.com.", dns.TypeMX, 3600), Preference: 20, Mx: "Backup.Example.COM."}
+	mxSet := []dns.RR{mx1, mx2}
+	mxSig := &dns.RRSIG{Hdr: rh("example.com.", dns.TypeRRSIG, 3600),
+		TypeCovered: dns.TypeMX, Algorithm: dns.ECDSAP256SHA256, Labels: 2, OrigTtl: 3600,
+		Expiration: 1700000000, Inception: 1600000000, KeyTag: mxKey.KeyTag(), SignerName: "example.com."}
+	if err := mxSig.Sign(mxPriv.(crypto.Signer), mxSet); err != nil {
+		panic(err)
+	}
+	dvecs = append(dvecs, dnssecVec{
+		Alg: dns.ECDSAP256SHA256, Dnskey: hexOf(mxKey), Rrsig: hexOf(mxSig),
+		Rrset: []string{hexOf(mx1), hexOf(mx2)}, Ds: hexOf(mxKey.ToDS(dns.SHA256)), KeyTag: mxKey.KeyTag(),
+	})
 	writeJSON("Tests/DNSSECTests/oracle_dnssec.json", dvecs)
+
+	// TSIG: sign a query with miekg and emit the wire bytes + key.
+	tmsg := new(dns.Msg)
+	tmsg.Id = 0x1234
+	tmsg.SetQuestion("example.com.", dns.TypeA)
+	tsecret := seq(16)
+	tmsg.SetTsig("test.key.", dns.HmacSHA256, 300, 1600000000)
+	tsigWire, _, err := dns.TsigGenerate(tmsg, base64.StdEncoding.EncodeToString(tsecret), "", false)
+	if err != nil {
+		panic(err)
+	}
+	writeJSON("Tests/DNSSECTests/oracle_tsig.json", map[string]string{
+		"keyName":   "test.key.",
+		"algorithm": dns.HmacSHA256,
+		"secretHex": hx(tsecret),
+		"wire":      hex.EncodeToString(tsigWire),
+	})
 }
 
 func packMsg(m *dns.Msg) map[string]string {

@@ -129,6 +129,8 @@ public protocol RR: Sendable {
     init(header: RRHeader, rdataTokens tokens: [String], origin: String) throws
     /// The rdata rendered in presentation (zone-file) format.
     func rdataPresentation() throws -> String
+    /// A copy with rdata domain names lowercased (DNSSEC canonical form).
+    func withLowercasedNames() -> Self
 }
 
 extension RR {
@@ -137,6 +139,9 @@ extension RR {
     public func rdataPresentation() throws -> String {
         throw WireError.malformedText("presentation rendering not supported for \(Swift.type(of: self))")
     }
+
+    /// Default: no rdata names to lowercase. Overridden by `@DNSRecord`.
+    public func withLowercasedNames() -> Self { self }
 
     /// The full record in presentation format: `name TTL CLASS TYPE rdata`.
     public func present() throws -> String {

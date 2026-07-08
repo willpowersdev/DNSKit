@@ -1,6 +1,7 @@
 import XCTest
 import Foundation
 import Crypto
+import _CryptoExtras
 import DNSCore
 import DNSTypes
 @testable import DNSSEC
@@ -85,5 +86,24 @@ final class DNSSECTests: XCTestCase {
                          flags: 257, proto: 3, algorithm: signer.algorithm, publicKey: signer.publicKey)
         let rrsig = try DNSSEC.sign(rrset: rrset(), template: template(keyTag: try DNSSEC.keyTag(key)), signer: signer)
         XCTAssertTrue(try DNSSEC.verify(rrsig: rrsig, rrset: rrset(), key: key))
+    }
+
+    func testRSASignVerifyRoundTrip() throws {
+        let signer = RSASigner(try _RSA.Signing.PrivateKey(keySize: .bits2048))
+        XCTAssertFalse(signer.publicKey.isEmpty)
+        let key = DNSKEY(header: RRHeader(name: Name("example.com."), type: .dnskey, ttl: 3600),
+                         flags: 257, proto: 3, algorithm: signer.algorithm, publicKey: signer.publicKey)
+        let rrsig = try DNSSEC.sign(rrset: rrset(), template: template(keyTag: try DNSSEC.keyTag(key)), signer: signer)
+        XCTAssertTrue(try DNSSEC.verify(rrsig: rrsig, rrset: rrset(), key: key))
+    }
+
+    /// Name-bearing canonical form: an MX RRset with mixed-case targets signed
+    /// by miekg must verify (both sides lowercase the exchange names).
+    func testNameBearingCanonicalFormViaOracle() throws {
+        // Covered by testVerifiesGoSignaturesAndDS (the MX vector), but assert
+        // the lowercasing explicitly here too.
+        let mx = MX(header: RRHeader(name: Name("example.com."), type: .mx, ttl: 3600),
+                    preference: 10, mx: Name("Mail.EXAMPLE.com."))
+        XCTAssertEqual(mx.withLowercasedNames().mx.value, "mail.example.com.")
     }
 }

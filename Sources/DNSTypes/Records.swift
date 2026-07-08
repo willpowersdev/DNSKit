@@ -465,3 +465,18 @@ import DNSCore
     public var header: RRHeader
     public var rdata: [UInt8] // hex — unknown-type opaque rdata
 }
+
+// MARK: - Transaction signature (RFC 8945). Regular wire format; the MAC
+// computation lives in the DNSSEC module.
+@DNSRecord public struct TSIG: RR {
+    public var header: RRHeader
+    public var algorithm: Name
+    @UInt48 public var timeSigned: UInt64
+    public var fudge: UInt16
+    public var macSize: UInt16
+    @SizePrefixed("macSize") public var mac: [UInt8]
+    public var origID: UInt16
+    public var error: UInt16
+    public var otherLen: UInt16
+    @SizePrefixed("otherLen") public var otherData: [UInt8]
+}
