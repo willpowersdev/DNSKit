@@ -48,6 +48,15 @@ final class DifferentialTests: XCTestCase {
                            typeBitMap: [RRType.a.rawValue, RRType.ns.rawValue, RRType.aaaa.rawValue]),
             "TKEY": TKEY(header: hdr(.tkey), algorithm: Name("hmac-sha256."), inception: 1, expiration: 2,
                          mode: 3, error: 0, keySize: 16, key: bytes(16), otherLen: 2, otherData: [0xFF, 0xEE]),
+            "OPT": OPT(udpSize: 1232, dnssecOK: true, options: [
+                EDNS0_NSID(nsid: [0xAA, 0xBB]),
+                EDNS0_COOKIE(cookie: bytes(8)),
+                EDNS0_EDE(infoCode: 6, extraText: "bad"),
+                EDNS0_PADDING(padding: [0, 0, 0, 0]),
+                EDNS0_SUBNET(family: 1, sourceNetmask: 24, sourceScope: 0, address: [192, 0, 2]),
+                EDNS0_TCP_KEEPALIVE(timeout: 100),
+                EDNS0_EXPIRE(expire: 86400),
+            ]),
         ]
     }
 

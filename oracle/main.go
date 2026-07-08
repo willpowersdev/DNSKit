@@ -77,6 +77,18 @@ func main() {
 	out["TKEY"] = hexOf(&dns.TKEY{Hdr: h(dns.TypeTKEY), Algorithm: "hmac-sha256.", Inception: 1, Expiration: 2,
 		Mode: 3, Error: 0, KeySize: 16, Key: hx(seq(16)), OtherLen: 2, OtherData: hx([]byte{0xFF, 0xEE})})
 
+	opt := &dns.OPT{Hdr: dns.RR_Header{Name: ".", Rrtype: dns.TypeOPT, Class: 1232, Ttl: 0x8000}}
+	opt.Option = []dns.EDNS0{
+		&dns.EDNS0_NSID{Code: dns.EDNS0NSID, Nsid: "aabb"},
+		&dns.EDNS0_COOKIE{Code: dns.EDNS0COOKIE, Cookie: "0001020304050607"},
+		&dns.EDNS0_EDE{InfoCode: 6, ExtraText: "bad"},
+		&dns.EDNS0_PADDING{Padding: []byte{0, 0, 0, 0}},
+		&dns.EDNS0_SUBNET{Code: dns.EDNS0SUBNET, Family: 1, SourceNetmask: 24, SourceScope: 0, Address: net.IP{192, 0, 2, 0}},
+		&dns.EDNS0_TCP_KEEPALIVE{Code: dns.EDNS0TCPKEEPALIVE, Timeout: 100},
+		&dns.EDNS0_EXPIRE{Expire: 86400},
+	}
+	out["OPT"] = hexOf(opt)
+
 	writeJSON("Tests/DNSTypesTests/oracle.json", out)
 
 	// Full messages: emit both compressed and uncompressed wire bytes. The

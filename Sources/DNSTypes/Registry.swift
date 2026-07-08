@@ -83,6 +83,7 @@ enum RRRegistry {
             RRType.null.rawValue: d(NULL.self),
             RRType.any.rawValue: d(ANY.self),
             RRType.nxname.rawValue: d(NXNAME.self),
+            RRType.opt.rawValue: d(OPT.self),
         ]
     }()
 
