@@ -9,6 +9,7 @@ let package = Package(
         .library(name: "DNSCore", targets: ["DNSCore"]),
         .library(name: "DNSTypes", targets: ["DNSTypes"]),
         .library(name: "DNSClient", targets: ["DNSClient"]),
+        .library(name: "DNSServer", targets: ["DNSServer"]),
     ],
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.0"),
@@ -39,10 +40,23 @@ let package = Package(
             .product(name: "NIOPosix", package: "swift-nio"),
         ]),
 
+        // DNS server (handler + mux + UDP/TCP listeners) on SwiftNIO.
+        .target(name: "DNSServer", dependencies: [
+            "DNSCore", "DNSTypes",
+            .product(name: "NIOCore", package: "swift-nio"),
+            .product(name: "NIOPosix", package: "swift-nio"),
+            .product(name: "NIOConcurrencyHelpers", package: "swift-nio"),
+        ]),
+
         .testTarget(name: "DNSCoreTests", dependencies: ["DNSCore"]),
         .testTarget(name: "DNSTypesTests", dependencies: ["DNSTypes", "DNSCore"]),
         .testTarget(name: "DNSClientTests", dependencies: [
             "DNSClient", "DNSCore", "DNSTypes",
+            .product(name: "NIOCore", package: "swift-nio"),
+            .product(name: "NIOPosix", package: "swift-nio"),
+        ]),
+        .testTarget(name: "DNSServerTests", dependencies: [
+            "DNSServer", "DNSClient", "DNSCore", "DNSTypes",
             .product(name: "NIOCore", package: "swift-nio"),
             .product(name: "NIOPosix", package: "swift-nio"),
         ]),

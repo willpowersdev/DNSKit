@@ -115,6 +115,16 @@ public struct Msg: Sendable {
         return buf.bytes
     }
 
+    /// Builds a response skeleton for this query: same id/opcode/question, with
+    /// the QR (response) bit set and the answer sections empty.
+    public func makeReply() -> Msg {
+        var h = header
+        h.response = true
+        h.authoritative = false
+        h.truncated = false
+        return Msg(header: h, questions: questions)
+    }
+
     /// Parses a message from wire format.
     public init(unpacking bytes: [UInt8]) throws {
         var u = MessageUnpacker(bytes)
