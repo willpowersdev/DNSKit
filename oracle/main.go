@@ -7,6 +7,7 @@
 package main
 
 import (
+	"crypto"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -187,6 +188,50 @@ func main() {
 		zone = append(zone, zoneVec{Line: line, Hex: hex.EncodeToString(buf[:off])})
 	}
 	writeJSON("Tests/DNSTypesTests/oracle_zone.json", zone)
+
+	// DNSSEC: generate a key per algorithm, sign an A RRset, and emit the
+	// DNSKEY/RRSIG/RRset/DS wire bytes + key tag. The Swift side reconstructs
+	// the signing data and VERIFIES miekg's signature (interop), and checks
+	// the key tag and DS digest.
+	type dnssecVec struct {
+		Alg    uint8    `json:"alg"`
+		Dnskey string   `json:"dnskey"`
+		Rrsig  string   `json:"rrsig"`
+		Rrset  []string `json:"rrset"`
+		Ds     string   `json:"ds"`
+		KeyTag uint16   `json:"keytag"`
+	}
+	algs := []struct {
+		a    uint8
+		bits int
+	}{
+		{dns.ECDSAP256SHA256, 256},
+		{dns.ECDSAP384SHA384, 384},
+		{dns.ED25519, 256},
+	}
+	var dvecs []dnssecVec
+	for _, ab := range algs {
+		key := &dns.DNSKEY{Hdr: rh("example.com.", dns.TypeDNSKEY, 3600), Flags: 257, Protocol: 3, Algorithm: ab.a}
+		priv, err := key.Generate(ab.bits)
+		if err != nil {
+			panic(err)
+		}
+		a1 := &dns.A{Hdr: rh("example.com.", dns.TypeA, 3600), A: net.ParseIP("192.0.2.1")}
+		a2 := &dns.A{Hdr: rh("example.com.", dns.TypeA, 3600), A: net.ParseIP("192.0.2.2")}
+		rrset := []dns.RR{a1, a2}
+		sig := &dns.RRSIG{Hdr: rh("example.com.", dns.TypeRRSIG, 3600),
+			TypeCovered: dns.TypeA, Algorithm: ab.a, Labels: 2, OrigTtl: 3600,
+			Expiration: 1700000000, Inception: 1600000000, KeyTag: key.KeyTag(), SignerName: "example.com."}
+		if err := sig.Sign(priv.(crypto.Signer), rrset); err != nil {
+			panic(err)
+		}
+		ds := key.ToDS(dns.SHA256)
+		dvecs = append(dvecs, dnssecVec{
+			Alg: ab.a, Dnskey: hexOf(key), Rrsig: hexOf(sig),
+			Rrset: []string{hexOf(a1), hexOf(a2)}, Ds: hexOf(ds), KeyTag: key.KeyTag(),
+		})
+	}
+	writeJSON("Tests/DNSSECTests/oracle_dnssec.json", dvecs)
 }
 
 func packMsg(m *dns.Msg) map[string]string {

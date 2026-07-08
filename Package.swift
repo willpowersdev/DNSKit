@@ -10,10 +10,12 @@ let package = Package(
         .library(name: "DNSTypes", targets: ["DNSTypes"]),
         .library(name: "DNSClient", targets: ["DNSClient"]),
         .library(name: "DNSServer", targets: ["DNSServer"]),
+        .library(name: "DNSSEC", targets: ["DNSSEC"]),
     ],
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.0"),
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.65.0"),
+        .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0"),
     ],
     targets: [
         // Pure wire primitives: buffers, names, addresses, errors. No dependencies.
@@ -48,6 +50,12 @@ let package = Package(
             .product(name: "NIOConcurrencyHelpers", package: "swift-nio"),
         ]),
 
+        // DNSSEC: key tags, DS digests, RRSIG signing/verification.
+        .target(name: "DNSSEC", dependencies: [
+            "DNSCore", "DNSTypes",
+            .product(name: "Crypto", package: "swift-crypto"),
+        ]),
+
         .testTarget(name: "DNSCoreTests", dependencies: ["DNSCore"]),
         .testTarget(name: "DNSTypesTests", dependencies: ["DNSTypes", "DNSCore"]),
         .testTarget(name: "DNSClientTests", dependencies: [
@@ -59,6 +67,10 @@ let package = Package(
             "DNSServer", "DNSClient", "DNSCore", "DNSTypes",
             .product(name: "NIOCore", package: "swift-nio"),
             .product(name: "NIOPosix", package: "swift-nio"),
+        ]),
+        .testTarget(name: "DNSSECTests", dependencies: [
+            "DNSSEC", "DNSCore", "DNSTypes",
+            .product(name: "Crypto", package: "swift-crypto"),
         ]),
     ]
 )
