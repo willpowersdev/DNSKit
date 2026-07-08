@@ -145,6 +145,48 @@ func main() {
 		"response": packMsg(resp),
 	}
 	writeJSON("Tests/DNSTypesTests/oracle_messages.json", msgs)
+
+	// Zone-file (presentation) lines: parse with miekg, pack uncompressed. The
+	// Swift side parses the same line and must produce identical wire bytes.
+	zoneLines := []string{
+		"example.com. 3600 IN A 192.0.2.1",
+		"example.com. 3600 IN AAAA 2001:db8::1",
+		"example.com. 3600 IN NS ns1.example.com.",
+		"example.com. 3600 IN CNAME target.example.com.",
+		"example.com. 3600 IN PTR host.example.com.",
+		"example.com. 3600 IN MX 10 mail.example.com.",
+		"example.com. 3600 IN KX 10 kx.example.com.",
+		`example.com. 3600 IN TXT "hello" "world"`,
+		"example.com. 3600 IN SOA ns1.example.com. hostmaster.example.com. 2024010101 7200 3600 1209600 3600",
+		"_sip._tcp.example.com. 3600 IN SRV 1 5 5060 sipserver.example.com.",
+		`example.com. 3600 IN NAPTR 100 10 "U" "E2U+sip" "!^.*$!sip:x@y!" .`,
+		`example.com. 3600 IN CAA 0 issue "letsencrypt.org"`,
+		`example.com. 3600 IN HINFO "Intel" "Linux"`,
+		"example.com. 3600 IN RP admin.example.com. txt.example.com.",
+		"example.com. 3600 IN DS 12345 8 2 abcdef",
+		"example.com. 3600 IN DNSKEY 256 3 8 AAECAwQFBgcICQoLDA0ODw==",
+		"example.com. 3600 IN TLSA 3 1 1 000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+		"example.com. 3600 IN SSHFP 1 1 00010203040506070809",
+		"example.com. 3600 IN CERT 1 1234 8 AAECAwQFBgcICQoLDA0ODxAREhM=",
+	}
+	type zoneVec struct {
+		Line string `json:"line"`
+		Hex  string `json:"hex"`
+	}
+	var zone []zoneVec
+	for _, line := range zoneLines {
+		rr, err := dns.NewRR(line)
+		if err != nil {
+			panic(err)
+		}
+		buf := make([]byte, 65535)
+		off, err := dns.PackRR(rr, buf, 0, nil, false)
+		if err != nil {
+			panic(err)
+		}
+		zone = append(zone, zoneVec{Line: line, Hex: hex.EncodeToString(buf[:off])})
+	}
+	writeJSON("Tests/DNSTypesTests/oracle_zone.json", zone)
 }
 
 func packMsg(m *dns.Msg) map[string]string {

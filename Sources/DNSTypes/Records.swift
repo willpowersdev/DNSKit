@@ -207,7 +207,7 @@ import DNSCore
     public var inception: UInt32
     public var keyTag: UInt16
     public var signerName: Name
-    public var signature: [UInt8] // base64
+    @Base64 public var signature: [UInt8] // base64
 }
 
 @DNSRecord public struct SIG: RR {
@@ -285,7 +285,7 @@ import DNSCore
     public var flags: UInt16
     public var proto: UInt8
     public var algorithm: UInt8
-    public var publicKey: [UInt8] // base64
+    @Base64 public var publicKey: [UInt8] // base64
 }
 
 @DNSRecord public struct KEY: RR {
@@ -317,7 +317,7 @@ import DNSCore
     public var type: UInt16
     public var keyTag: UInt16
     public var algorithm: UInt8
-    public var certificate: [UInt8] // base64
+    @Base64 public var certificate: [UInt8] // base64
 }
 
 @DNSRecord public struct NSEC3: RR {
@@ -368,7 +368,7 @@ import DNSCore
 
 @DNSRecord public struct OPENPGPKEY: RR {
     public var header: RRHeader
-    public var publicKey: [UInt8] // base64
+    @Base64 public var publicKey: [UInt8] // base64
 }
 
 // MARK: - Certificates / hashes
@@ -391,7 +391,7 @@ import DNSCore
 
 @DNSRecord public struct DHCID: RR {
     public var header: RRHeader
-    public var digest: [UInt8] // base64
+    @Base64 public var digest: [UInt8] // base64
 }
 
 // MARK: - Key exchange / transaction key

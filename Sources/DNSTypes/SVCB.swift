@@ -211,6 +211,9 @@ public struct SVCB: RR {
         (priority, target, values) = try unpackSVCBRdata(header: header, from: &buf)
         self.header = header
     }
+    public init(header: RRHeader, rdataTokens tokens: [String], origin: String) throws {
+        throw WireError.malformedText("presentation parsing not supported for SVCB")
+    }
 }
 
 /// HTTPS record (RFC 9460) — identical wire format to SVCB.
@@ -229,5 +232,8 @@ public struct HTTPS: RR {
     public init(header: RRHeader, rdata buf: inout MessageUnpacker) throws {
         (priority, target, values) = try unpackSVCBRdata(header: header, from: &buf)
         self.header = header
+    }
+    public init(header: RRHeader, rdataTokens tokens: [String], origin: String) throws {
+        throw WireError.malformedText("presentation parsing not supported for HTTPS")
     }
 }

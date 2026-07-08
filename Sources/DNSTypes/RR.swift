@@ -125,6 +125,25 @@ public protocol RR: Sendable {
     var header: RRHeader { get set }
     func packRdata(into buf: inout MessagePacker) throws
     init(header: RRHeader, rdata buf: inout MessageUnpacker) throws
+    /// Builds the record from presentation-format rdata tokens.
+    init(header: RRHeader, rdataTokens tokens: [String], origin: String) throws
+    /// The rdata rendered in presentation (zone-file) format.
+    func rdataPresentation() throws -> String
+}
+
+extension RR {
+    /// Default: presentation rendering not yet implemented for this type
+    /// (e.g. the hand-written OPT/SVCB records). Overridden by `@DNSRecord`.
+    public func rdataPresentation() throws -> String {
+        throw WireError.malformedText("presentation rendering not supported for \(Swift.type(of: self))")
+    }
+
+    /// The full record in presentation format: `name TTL CLASS TYPE rdata`.
+    public func present() throws -> String {
+        let type = RRType.mnemonic(header.type)
+        let cls = RRClass.mnemonic(header.class)
+        return "\(header.name.value)\t\(header.ttl)\t\(cls)\t\(type)\t" + (try rdataPresentation())
+    }
 }
 
 extension RR {

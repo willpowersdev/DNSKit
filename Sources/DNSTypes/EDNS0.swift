@@ -209,4 +209,8 @@ public struct OPT: RR {
         }
         self.options = opts
     }
+
+    public init(header: RRHeader, rdataTokens tokens: [String], origin: String) throws {
+        throw WireError.malformedText("presentation parsing not supported for OPT")
+    }
 }

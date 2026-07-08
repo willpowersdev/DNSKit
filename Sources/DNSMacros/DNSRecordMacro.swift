@@ -16,7 +16,30 @@ private struct Field {
     var compressed = false          // @Compressed: cdomain-name
     var octet = false               // @Octet: rest-of-rdata as a raw string
     var uint48 = false              // @UInt48: 6-octet integer
+    var base64 = false              // @Base64: [UInt8] rendered/parsed as base64 (else hex)
     var sizeField: String? = nil    // @SizePrefixed("lenField"): byte count from another field
+}
+
+/// Presentation-format classification for a field (used to generate the zone
+/// text render/parse code). `.unsupported` fields make the whole record's
+/// presentation methods throw (deferred to a later milestone).
+private enum PresentationKind {
+    case integer, name, nameList, ipv4, ipv6, characterString, octet, txt, hex, base64, unsupported
+}
+
+private func presentationKind(_ f: Field) -> PresentationKind {
+    switch f.type {
+    case "UInt8", "UInt16", "UInt32", "UInt64": return .integer
+    case "Name": return .name
+    case "[Name]": return .nameList
+    case "IPv4Address": return .ipv4
+    case "IPv6Address": return .ipv6
+    case "String": return f.octet ? .octet : .characterString
+    case "[String]": return .txt
+    case "[UInt8]": return f.sizeField != nil ? .unsupported : (f.base64 ? .base64 : .hex)
+    case "[UInt16]": return .unsupported
+    default: return .unsupported
+    }
 }
 
 /// `@DNSRecord` — generates the wire codec (`packRdata` + `init(header:rdata:)`)
@@ -35,7 +58,7 @@ public struct DNSRecordMacro: MemberMacro {
         var fields: [Field] = []
         for member in structDecl.memberBlock.members {
             guard let varDecl = member.decl.as(VariableDeclSyntax.self) else { continue }
-            var compressed = false, octet = false, uint48 = false
+            var compressed = false, octet = false, uint48 = false, base64 = false
             var sizeField: String? = nil
             for element in varDecl.attributes {
                 guard let attr = element.as(AttributeSyntax.self),
@@ -44,6 +67,7 @@ public struct DNSRecordMacro: MemberMacro {
                 case "Compressed": compressed = true
                 case "Octet": octet = true
                 case "UInt48": uint48 = true
+                case "Base64": base64 = true
                 case "SizePrefixed":
                     if let args = attr.arguments?.as(LabeledExprListSyntax.self),
                        let lit = args.first?.expression.as(StringLiteralExprSyntax.self) {
@@ -58,7 +82,7 @@ public struct DNSRecordMacro: MemberMacro {
                       let type = binding.typeAnnotation?.type else { continue }
                 fields.append(Field(name: pat.identifier.text, type: type.trimmedDescription,
                                     compressed: compressed, octet: octet,
-                                    uint48: uint48, sizeField: sizeField))
+                                    uint48: uint48, base64: base64, sizeField: sizeField))
             }
         }
 
@@ -93,7 +117,97 @@ public struct DNSRecordMacro: MemberMacro {
         }
         """
 
-        return [memberwiseInit, packRdata, rdataInit]
+        // Presentation (zone text) render + parse. If any field's presentation
+        // isn't supported yet, both methods throw at runtime.
+        let typeName = structDecl.name.text
+        let unsupported = rdataFields.contains { presentationKind($0) == .unsupported }
+
+        let renderBody: String
+        if unsupported {
+            renderBody = #"throw WireError.malformedText("presentation rendering not supported for \#(typeName)")"#
+        } else if rdataFields.isEmpty {
+            renderBody = #"return """#
+        } else {
+            let parts = rdataFields.map { renderExpression($0) }.joined(separator: ",\n            ")
+            renderBody = "return [\n            \(parts)\n        ].joined(separator: \" \")"
+        }
+        let rdataPresentation: DeclSyntax = """
+        public func rdataPresentation() throws -> String {
+            \(raw: renderBody)
+        }
+        """
+
+        let parseBody: String
+        if unsupported {
+            parseBody = #"throw WireError.malformedText("presentation parsing not supported for \#(typeName)")"#
+        } else {
+            let stmts = rdataFields.map { parseStatement($0) }.joined(separator: "\n            ")
+            parseBody = "var _i = 0\n            _ = _i\n            \(stmts.isEmpty ? "" : stmts)\n            self.header = header"
+        }
+        let tokenInit: DeclSyntax = """
+        public init(header: RRHeader, rdataTokens _t: [String], origin: String) throws {
+            \(raw: parseBody)
+        }
+        """
+
+        return [memberwiseInit, packRdata, rdataInit, rdataPresentation, tokenInit]
+    }
+
+    /// Swift expression producing the presentation string for one field.
+    private static func renderExpression(_ f: Field) -> String {
+        switch presentationKind(f) {
+        case .integer: return "String(self.\(f.name))"
+        case .name: return "self.\(f.name).value"
+        case .nameList: return "self.\(f.name).map { $0.value }.joined(separator: \" \")"
+        case .ipv4, .ipv6: return "self.\(f.name).description"
+        case .characterString, .octet: return "dnsQuoteString(self.\(f.name))"
+        case .txt: return "self.\(f.name).map { dnsQuoteString($0) }.joined(separator: \" \")"
+        case .hex: return "dnsRenderHex(self.\(f.name))"
+        case .base64: return "dnsRenderBase64(self.\(f.name))"
+        case .unsupported: return "\"\""
+        }
+    }
+
+    /// Swift statement(s) parsing one field from the token array `_t` at `_i`.
+    private static func parseStatement(_ f: Field) -> String {
+        let n = f.name
+        func nextGuard() -> String {
+            "guard _i < _t.count else { throw WireError.malformedText(\"missing rdata field '\(n)'\") }"
+        }
+        switch presentationKind(f) {
+        case .integer:
+            return """
+            \(nextGuard())
+            guard let _v = \(f.type)(_t[_i]) else { throw WireError.malformedText("bad integer for '\(n)'") }
+            self.\(n) = _v; _i += 1
+            """
+        case .name:
+            return "\(nextGuard())\nself.\(n) = dnsQualify(_t[_i], origin: origin); _i += 1"
+        case .nameList:
+            return "self.\(n) = _t[_i...].map { dnsQualify($0, origin: origin) }; _i = _t.count"
+        case .ipv4:
+            return """
+            \(nextGuard())
+            guard let _v = IPv4Address(_t[_i]) else { throw WireError.malformedText("bad IPv4 for '\(n)'") }
+            self.\(n) = _v; _i += 1
+            """
+        case .ipv6:
+            return """
+            \(nextGuard())
+            guard let _v = IPv6Address(_t[_i]) else { throw WireError.malformedText("bad IPv6 for '\(n)'") }
+            self.\(n) = _v; _i += 1
+            """
+        case .characterString, .octet:
+            return "\(nextGuard())\nself.\(n) = _t[_i]; _i += 1"
+        case .txt:
+            return "self.\(n) = Array(_t[_i...]); _i = _t.count"
+        case .hex:
+            return "self.\(n) = try dnsParseHex(_t[_i...].joined()); _i = _t.count"
+        case .base64:
+            return "self.\(n) = try dnsParseBase64(_t[_i...].joined()); _i = _t.count"
+        case .unsupported:
+            return #"throw WireError.malformedText("unsupported field '\#(n)'")"#
+        }
     }
 
     private static func packStatement(_ f: Field) throws -> String {
