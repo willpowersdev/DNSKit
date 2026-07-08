@@ -77,9 +77,70 @@ func main() {
 	out["TKEY"] = hexOf(&dns.TKEY{Hdr: h(dns.TypeTKEY), Algorithm: "hmac-sha256.", Inception: 1, Expiration: 2,
 		Mode: 3, Error: 0, KeySize: 16, Key: hx(seq(16)), OtherLen: 2, OtherData: hx([]byte{0xFF, 0xEE})})
 
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetIndent("", "  ")
-	if err := enc.Encode(out); err != nil {
+	writeJSON("Tests/DNSTypesTests/oracle.json", out)
+
+	// Full messages: emit both compressed and uncompressed wire bytes. The
+	// Swift side compares uncompressed bytes exactly (well-defined) and checks
+	// that it can DECOMPRESS the compressed form (compression itself is
+	// implementation-defined, so we don't require byte-identical compression).
+	rh := func(name string, t uint16, ttl uint32) dns.RR_Header {
+		return dns.RR_Header{Name: name, Rrtype: t, Class: dns.ClassINET, Ttl: ttl}
+	}
+
+	query := new(dns.Msg)
+	query.Id = 0x1234
+	query.RecursionDesired = true
+	query.Question = []dns.Question{{Name: "www.example.com.", Qtype: dns.TypeA, Qclass: dns.ClassINET}}
+
+	resp := new(dns.Msg)
+	resp.Id = 0x1234
+	resp.Response = true
+	resp.Authoritative = true
+	resp.RecursionDesired = true
+	resp.RecursionAvailable = true
+	resp.Question = []dns.Question{{Name: "www.example.com.", Qtype: dns.TypeA, Qclass: dns.ClassINET}}
+	resp.Answer = []dns.RR{
+		&dns.A{Hdr: rh("www.example.com.", dns.TypeA, 300), A: net.ParseIP("192.0.2.1")},
+		&dns.A{Hdr: rh("www.example.com.", dns.TypeA, 300), A: net.ParseIP("192.0.2.2")},
+	}
+	resp.Ns = []dns.RR{
+		&dns.NS{Hdr: rh("example.com.", dns.TypeNS, 3600), Ns: "ns1.example.com."},
+		&dns.NS{Hdr: rh("example.com.", dns.TypeNS, 3600), Ns: "ns2.example.com."},
+	}
+	resp.Extra = []dns.RR{
+		&dns.A{Hdr: rh("ns1.example.com.", dns.TypeA, 3600), A: net.ParseIP("192.0.2.53")},
+	}
+
+	msgs := map[string]map[string]string{
+		"query":    packMsg(query),
+		"response": packMsg(resp),
+	}
+	writeJSON("Tests/DNSTypesTests/oracle_messages.json", msgs)
+}
+
+func packMsg(m *dns.Msg) map[string]string {
+	m.Compress = false
+	un, err := m.Pack()
+	if err != nil {
+		panic(err)
+	}
+	m.Compress = true
+	co, err := m.Pack()
+	if err != nil {
+		panic(err)
+	}
+	return map[string]string{
+		"uncompressed": hex.EncodeToString(un),
+		"compressed":   hex.EncodeToString(co),
+	}
+}
+
+func writeJSON(path string, v any) {
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		panic(err)
+	}
+	if err := os.WriteFile(path, append(b, '\n'), 0o644); err != nil {
 		panic(err)
 	}
 }
