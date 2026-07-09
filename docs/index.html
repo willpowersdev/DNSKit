@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="DNSKit — a cross-platform Swift DNS library, a port of miekg/dns by Miek Gieben. Public API reference.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>&#127760;</text></svg>">
+<title>DNSKit — DNS for Swift</title>
+<style>
+  :root {
+    --paper: #f6f7f9;
+    --paper-2: #eef1f5;
+    --ink: #10192b;
+    --ink-soft: #3a4557;
+    --muted: #6b7688;
+    --accent: #0e7c86;
+    --accent-deep: #0a5960;
+    --line: #e2e6ec;
+    --line-strong: #d3d9e2;
+    --panel: #0c1322;
+    --panel-line: #223049;
+    --term-dim: #7c8aa5;
+    --term-name: #86c5e6;
+    --term-str: #e6b980;
+    --term-teal: #5fd3cf;
+    --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Monaco, "Cascadia Mono", Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  .wrap {
+    max-width: 940px;
+    margin: 0 auto;
+    padding: 0 28px;
+  }
+
+  a { color: var(--accent-deep); text-decoration: none; border-bottom: 1px solid var(--line-strong); }
+  a:hover { border-bottom-color: var(--accent); }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--accent-deep);
+    margin: 0;
+  }
+
+  /* ---------- Hero ---------- */
+  header.hero { padding: 76px 0 40px; }
+
+  .wordmark {
+    font-family: var(--mono);
+    font-weight: 600;
+    font-size: clamp(2.9rem, 8vw, 4.6rem);
+    letter-spacing: -0.03em;
+    line-height: 1;
+    margin: 18px 0 0;
+  }
+  .wordmark .kit { color: var(--accent); }
+
+  .tagline {
+    margin: 16px 0 0;
+    font-size: clamp(1.15rem, 2.6vw, 1.4rem);
+    font-weight: 500;
+    color: var(--ink-soft);
+    max-width: 34ch;
+    text-wrap: balance;
+  }
+
+  .lede {
+    margin: 26px 0 0;
+    max-width: 66ch;
+    color: var(--ink-soft);
+    font-size: 1.06rem;
+  }
+  .lede strong { color: var(--ink); font-weight: 600; }
+
+  /* ---------- Terminal card ---------- */
+  .term {
+    margin-top: 40px;
+    background: var(--panel);
+    border: 1px solid var(--panel-line);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 24px 50px -30px rgba(11, 20, 40, 0.55);
+  }
+  .term-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--panel-line);
+  }
+  .term-bar .dot { width: 11px; height: 11px; border-radius: 50%; background: #34405c; }
+  .term-bar .label {
+    margin-left: 8px;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--term-dim);
+  }
+  .term pre {
+    margin: 0;
+    padding: 20px 22px;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 0.86rem;
+    line-height: 1.75;
+    color: #d5deec;
+    tab-size: 2;
+  }
+  .term pre + pre { border-top: 1px solid var(--panel-line); }
+  .c  { color: var(--term-dim); font-style: italic; }
+  .k  { color: #c99bf0; }
+  .t  { color: var(--term-teal); }
+  .s  { color: var(--term-str); }
+  .fn { color: var(--term-name); }
+  .p  { color: #9fb0cc; }
+
+  /* ---------- Sections ---------- */
+  section { padding: 30px 0; }
+  section.bordered { border-top: 1px solid var(--line); }
+
+  h2 {
+    font-size: 1.5rem;
+    letter-spacing: -0.01em;
+    margin: 10px 0 0;
+    text-wrap: balance;
+  }
+  .section-head { margin-bottom: 22px; }
+  .prose { max-width: 66ch; color: var(--ink-soft); }
+  .prose p { margin: 14px 0 0; }
+  .prose strong { color: var(--ink); font-weight: 600; }
+  code {
+    font-family: var(--mono);
+    font-size: 0.86em;
+    background: var(--paper-2);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 1px 5px;
+    color: var(--accent-deep);
+  }
+
+  .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1px;
+    margin-top: 24px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .feature {
+    background: var(--paper);
+    padding: 18px 20px;
+  }
+  .feature h3 {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent-deep);
+  }
+  .feature p { margin: 8px 0 0; font-size: 0.92rem; color: var(--ink-soft); }
+
+  /* light code blocks for usage */
+  .snippet {
+    margin-top: 22px;
+    background: var(--panel);
+    border: 1px solid var(--panel-line);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .snippet .cap {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--term-dim);
+    padding: 11px 18px;
+    border-bottom: 1px solid var(--panel-line);
+  }
+  .snippet pre {
+    margin: 0; padding: 16px 20px; overflow-x: auto;
+    font-family: var(--mono); font-size: 0.84rem; line-height: 1.7; color: #d5deec;
+  }
+
+  /* ---------- API reference ---------- */
+  .api-intro { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px 18px; }
+  .api-count {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+  }
+
+  .api-group { margin-top: 30px; }
+  .api-letter {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 6px;
+  }
+  .api-letter span {
+    font-family: var(--mono);
+    font-weight: 600;
+    font-size: 1.15rem;
+    color: var(--accent);
+  }
+  .api-letter .rule { flex: 1; height: 1px; background: var(--line-strong); }
+
+  .api-item {
+    padding: 16px 0;
+    border-bottom: 1px solid var(--line);
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .sig-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
+  .sig {
+    font-family: var(--mono);
+    font-size: 0.94rem;
+    color: var(--ink);
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+  .sig .arg { color: var(--ink-soft); font-weight: 400; }
+  .sig .ret { color: var(--accent-deep); font-weight: 400; }
+  .owner {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    background: var(--paper-2);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 2px 9px;
+    white-space: nowrap;
+  }
+  .desc { color: var(--ink-soft); font-size: 0.95rem; max-width: 72ch; }
+
+  /* ---------- Acknowledgment ---------- */
+  .ack {
+    margin-top: 8px;
+    background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 34px 34px;
+  }
+  .ack .eyebrow { color: var(--accent-deep); }
+  .ack p { margin: 14px 0 0; max-width: 62ch; color: var(--ink-soft); font-size: 1.05rem; }
+  .ack p strong { color: var(--ink); }
+  .ack .name { color: var(--accent-deep); font-weight: 600; }
+
+  /* ---------- Footer ---------- */
+  footer {
+    margin-top: 20px;
+    border-top: 1px solid var(--line);
+    padding: 30px 0 64px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 14px;
+    align-items: baseline;
+  }
+  .colophon {
+    font-family: var(--mono);
+    font-size: 0.76rem;
+    color: var(--muted);
+    letter-spacing: 0.02em;
+    line-height: 1.7;
+  }
+  .colophon .credit { color: var(--ink-soft); }
+
+  @media (max-width: 560px) {
+    header.hero { padding: 52px 0 28px; }
+    .term pre, .snippet pre { font-size: 0.78rem; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <p class="eyebrow">DNS for Swift &middot; cross-platform</p>
+    <h1 class="wordmark">DNS<span class="kit">Kit</span></h1>
+    <p class="tagline">A full-featured interface to the Domain Name System.</p>
+    <p class="lede">
+      Both client- and server-side programming are supported, giving you complete control
+      over what goes on the wire behind a small, clean API. Resource records are
+      <strong>native Swift value types</strong> — never stored in wire format — and the whole
+      library runs on macOS, iOS, and Linux over SwiftNIO and swift-crypto.
+    </p>
+
+    <div class="term" role="img" aria-label="A Swift DNS query and its dig-style answer">
+      <div class="term-bar">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        <span class="label">resolve — swift</span>
+      </div>
+<pre><span class="k">import</span> DNSKit
+
+<span class="k">let</span> client = <span class="t">DNSClient</span>()
+<span class="k">let</span> reply = <span class="k">try await</span> client.<span class="fn">query</span>(<span class="s">"example.com."</span>, .a, server: <span class="s">"1.1.1.1"</span>)
+<span class="fn">print</span>(reply)  <span class="c">// dig-style output ↓</span></pre>
+<pre><span class="c">;; -&gt;&gt;HEADER&lt;&lt;- opcode: 0, rcode: 0, id: 4660</span>
+<span class="c">;; flags: qr rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 0</span>
+
+;; ANSWER SECTION:
+<span class="term-name">example.com.</span>  <span class="p">300  IN  A</span>  <span class="term-str">93.184.216.34</span></pre>
+    </div>
+  </header>
+
+  <section class="bordered">
+    <div class="section-head">
+      <p class="eyebrow">The library</p>
+      <h2>Everything a DNS programmer needs, and nothing they don&rsquo;t.</h2>
+    </div>
+    <div class="prose">
+      <p>
+        DNSKit supports asynchronous querying and replying, incoming and outgoing zone
+        transfers, TSIG, EDNS0, dynamic updates, and DNSSEC validation and signing. Wire codecs
+        for all ~80 record types are generated at compile time by the <code>@DNSRecord</code>
+        macro, and every encoding is verified byte-for-byte against the reference implementation.
+      </p>
+      <p>
+        One note carried over from the original: domain names <strong>must be fully qualified</strong>
+        before they are sent — an unqualified name will fail to pack.
+      </p>
+    </div>
+
+    <div class="feature-grid">
+      <div class="feature"><h3>Messages</h3><p>Build, pack, and parse queries and responses with full header and section control.</p></div>
+      <div class="feature"><h3>Records</h3><p>~80 native record types, plus EDNS0, SVCB/HTTPS, and zone-file parsing.</p></div>
+      <div class="feature"><h3>Client &amp; Server</h3><p>Async resolver and authoritative server over UDP and TCP on SwiftNIO.</p></div>
+      <div class="feature"><h3>DNSSEC</h3><p>RRSIG signing and validation, DS, NSEC3, TSIG, and SIG(0) via swift-crypto.</p></div>
+    </div>
+  </section>
+
+  <section class="bordered">
+    <div class="section-head">
+      <p class="eyebrow">Usage</p>
+      <h2>Records are values; a resolver is one call away.</h2>
+    </div>
+    <div class="prose">
+      <p>Create a resource record straight from zone-file text:</p>
+    </div>
+    <div class="snippet">
+      <div class="cap">records</div>
+<pre><span class="k">let</span> mx = <span class="k">try</span> <span class="fn">NewRR</span>(<span class="s">"example.com. 3600 IN MX 10 mail.example.com."</span>)
+
+<span class="c">// …or build it directly as a value type</span>
+<span class="k">let</span> a = <span class="t">A</span>(header: <span class="t">RRHeader</span>(name: <span class="s">"example.com."</span>, type: .a, ttl: <span class="p">300</span>),
+          a: <span class="t">IPv4Address</span>(<span class="s">"192.0.2.1"</span>))</pre>
+    </div>
+    <div class="prose">
+      <p>Stand up an authoritative responder, or validate a signed answer:</p>
+    </div>
+    <div class="snippet">
+      <div class="cap">server &amp; dnssec</div>
+<pre><span class="k">let</span> mux = <span class="t">ServeMux</span>()
+mux.<span class="fn">register</span>(<span class="s">"example.com."</span>, myHandler)
+<span class="k">let</span> server = <span class="t">DNSServer</span>(responder: mux)
+<span class="k">try await</span> server.<span class="fn">start</span>(host: <span class="s">"0.0.0.0"</span>, port: <span class="p">53</span>)
+
+<span class="k">let</span> valid = <span class="k">try</span> <span class="t">DNSSEC</span>.<span class="fn">verify</span>(rrsig: sig, rrset: [a1, a2], key: dnskey)</pre>
+    </div>
+  </section>
+
+  <section class="bordered">
+    <div class="section-head">
+      <p class="eyebrow">Reference</p>
+      <h2>Public API</h2>
+      <div class="api-intro">
+        <p class="prose" style="margin-top:12px">The public functions of DNSKit, alphabetized.</p>
+        <span class="api-count">31 entries</span>
+      </div>
+    </div>
+
+    <div class="api-group">
+      <div class="api-letter"><span>B</span><div class="rule"></div></div>
+      <div class="api-item">
+        <div class="sig-line"><span class="sig">base32HexEncode<span class="arg">(_ bytes: [UInt8])</span> <span class="ret">→ String</span></span><span class="owner">DNSSEC</span></div>
+        <p class="desc">Encodes bytes as unpadded, uppercase base32hex — the presentation form of an NSEC3 hashed name.</p>
+      </div>
+    </div>
+
+    <div class="api-group">
+      <div class="api-letter"><span>E</span><div class="rule"></div></div>
+      <div class="api-item">
+        <div class="sig-line"><span class="sig">exchange<span class="arg">(_ msg: Msg, server: String, useTCP: Bool)</span> <span class="ret">async throws → Msg</span></span><span class="owner">DNSClient</span></div>
+        <p class="desc">Sends a prepared message to a server and returns the reply, automatically retrying over TCP when a UDP answer is truncated.</p>
+      </div>
+    </div>
+
+    <div class="api-group">
+      <div class="api-letter"><span>F</span><div class="rule"></div></div>
+      <div class="api-item">
+        <div class="sig-line"><span class="sig">fromMnemonic<span class="arg">(_ s: String)</span> <span class="ret">→ RRType?</span></span><span class="owner">RRType · RRClass</span></div>
+        <p class="desc">Looks up a record type or class by its mnemonic (<code>"AAAA"</code>, <code>"IN"</code>) or the generic <code>TYPEn</code> / <code>CLASSn</code> form.</p>
+      </div>
+      <div class="api-item">
+        <div class="sig-line"><span class="sig">fromSystem<span class="arg">(path: String)</span> <span class="ret">→ ClientConfig?</span></span><span class="owner">ClientConfig</span></div>
+        <p class="desc">Loads a <code>resolv.conf</code>-style file, returning nil if it can&rsquo;t be read.</p>
+      </div>
+    </div>
+
+    <div class="api-group">
+      <div class="api-letter"><span>K</span><div class="rule"></div></div>
+      <div class="api-item">
+        <div class="sig-line"><span class="sig">keyTag<span class="arg">(_ key: DNSKEY)</span> <span class="ret">throws → UInt16</span></span><span class="owner">DNSSEC</span></div>
+        <p class="desc">Computes a DNSKEY&rsquo;s key tag (RFC 4034, Appendix B).</p>
+      </div>
+    </div>
+
+    <div class="api-group">
+      <div class="api-letter"><span>L</span><div class="rule"></div></div>
+      <div class="api-item">
+        <div class="sig-line"><span class="sig">labels<span class="arg">()</span> <span class="ret">throws → [[UInt8]]</span></span><span class="owner">Name</span></div>
+        <p class="desc">Splits a domain name into its wire labels, decoding <code>\.</code> and <code>\DDD</code> escapes.</p>
+      </div>
+      <div class="api-item">
+        <div class="sig-line"><span class="sig">lexPresentationLine<span class="arg">(_ line: String)</span> <span class="ret">→ [String]</span></span><span class="owner">free function</span></div>
+        <p class="desc">Tokenizes a line of zone-file text, handling quotes, comments, parentheses, and escapes.</p>
+      </div>
+    </div>
+
+    <div class="api-group">
+      <div class="api-letter"><span>M</span><div class="rule"></div></div>
+      <div class="api-item">
+        <div class="sig-line"><span class="sig">makeDS<span class="arg">(_ key: DNSKEY, digestType: UInt8)</span> <span class="ret">throws → DS</span></span><span class="owner">DNSSEC</span></div>
+        <p class="desc">Builds the DS record delegating to a DNSKEY, using SHA-1, SHA-256, or SHA-384.</p>
+      </div>
+      <div class="api-item">
+        <div class="sig-line"><span class="sig">makeReply<span class="arg">()</span> <span class="ret">→ Msg</span></span><span class="owner">Msg</span></div>
+        <p class="desc">Creates a response skeleton for a query — same id and question, QR bit set, sections cleared.</p>
+      </div>
+      <div class="api-item">
+        <div class="sig-line"><span class="sig">mnemonic<span class="arg">(_ type: RRType)</span> <span class="ret">→ String</span></span><span class="owner">RRType · RRClass</span></div>
+        <p class="desc">Returns the textual mnemonic for a record type or class.</p>
+      </div>
+    </div>
+
+    <div class="api-group">
+      <div class="api-letter"><span>N</span><div class="rule"></div></div>
+      <div class="api-item">
+        <div class="sig-line"><span class="sig">NewRR<span class="arg">(_ text: String, origin: String, defaultTTL: UInt32)</span> <span class="ret">throws → any RR</span></span><span class="owner">free function</span></div>
+        <p class="desc">Parses a single resource record from zone-file text.</p>
+      </div>
+      <div class="api-item">
+        <div class="sig-line"><span class="sig">nsec3Hash<span class="arg">(name: Name, salt: [UInt8], iterations: UInt16)</span> <span class="ret">throws → [UInt8]</span></span><span class="owner">DNSSEC</span></div>
+        <p class="desc">Computes an NSEC3 owner-name hash (iterated SHA-1, RFC 5155).</p>
+      </div>
+    </div>
+
+    <div class="api-group">
+      <div class="api-letter"><span>P</span><div class="rule"></div></div>
+      <div class="api-item">
+        <div class="sig-line"><span class="sig">pack<span class="arg">(compress: Bool)</span> <span class="ret">throws → [UInt8]</span></span><span class="owner">Msg</span></div>
+        <p class="desc">Serializes a message to wire format, with optional name compression.</p>
+      </div>
+      <div class="api-item">
+        <div class="sig-line"><span class="sig">packedBytes<span class="arg">(compress: Bool)</span> <span class="ret">throws → [UInt8]</span></span><span class="owner">RR</span></div>
+        <p class="desc">Returns a single record&rsquo;s full wire bytes (header and rdata).</p>
+      </div>
+      <div class="api-item">
+        <div class="sig-line"><span class="sig">parseZone<span class="arg">(_ text: String, origin: String, defaultTTL: UInt32)</span> <span class="ret">throws → [any RR]</span></span><span class="owner">free function</span></div>
+        <p class="desc">Parses a whole zone file: multi-line records, <code>$ORIGIN</code>, <code>$TTL</code>, and <code>$GENERATE</code>.</p>
+      </div>
+      <div class="api-item">
+        <div class="sig-line"><span class="sig">present<span class="arg">()</span> <span class="ret">throws → String</span></span><span class="owner">RR</span></div>
+        <p class="desc">Renders a record in presentation (zone-file) format.</p>
+      </div>
+    </div>
+
+    <div class="api-group">
+      <div class="api-letter"><span>Q</span><div class="rule"></div></div>
+      <div class="api-item">
+        <div class="sig-line"><span class="sig">query<span class="arg">(_ name: String, _ type: RRType, server: String)</span> <span class="ret">async throws → Msg</span></span><span class="owner">DNSClient</span></div>
+        <p class="desc">Builds a recursive query for a name and type and exchanges it with a server.</p>
+      </div>
+    </div>
+
+    <div class="api-group">
+      <div class="api-letter"><span>R</span><div class="rule"></div></div>
+      <div class="api-item">
+        <div class="sig-line"><span class="sig">register<span class="arg">(_ zone: Name, _ handler: any DNSResponder)</span></span><span class="owner">ServeMux</span></div>
+        <p class="desc">Routes a zone — and everything under it — to a handler, choosing the longest matching suffix.</p>
+      </div>
+      <div class="api-item">
+        <div class="sig-line"><span class="sig">respond<span class="arg">(to request: Msg, from client: SocketAddress)</span> <span class="ret">async → Msg?</span></span><span class="owner">DNSResponder</span></div>
+        <p class="desc">Handles a request and returns the reply to send, or nil to stay silent.</p>
+      </div>
+    </div>
+
+    <div class="api-group">
+      <div class="api-letter"><span>S</span><div class="rule"></div></div>
+      <div class="api-item">
+        <div class="sig-line"><span class="sig">shutdown<span class="arg">()</span> <span class="ret">async throws</span></span><span class="owner">DNSClient · DNSServer</span></div>
+        <p class="desc">Closes listeners and releases the owned event-loop group.</p>
+      </div>
+      <div class="api-item">
+        <div class="sig-line"><span class="sig">sign<span class="arg">(rrset:template:signer:)</span> <span class="ret">throws → RRSIG</span></span><span class="owner">DNSSEC · TSIG · SIG0</span></div>
+        <p class="desc">Signs an RRset (RRSIG), a message transaction (TSIG), or an entire message (SIG(0)).</p>
+      </div>
+      <div class="api-item">
+        <div class="sig-line"><span class="sig">signingData<span class="arg">(rrsig: RRSIG, rrset: [any RR])</span> <span class="ret">throws → [UInt8]</span></span><span class="owner">DNSSEC</span></div>
+        <p class="desc">Builds the canonical data covered by an RRSIG (RFC 4034 §3.1.8.1).</p>
+      </div>
+      <div class="api-item">
+        <div class="sig-line"><span class="sig">start<span class="arg">(host: String, port: Int)</span> <span class="ret">async throws</span></span><span class="owner">DNSServer</span></div>
+        <p class="desc">Binds the UDP and TCP listeners for the server.</p>
+      </div>
+      <div class="api-item">
+        <div class="sig-line"><span class="sig">systemDefault<span class="arg">()</span> <span class="ret">throws → ClientConfig</span></span><span class="owner">ClientConfig</span></div>
+        <p class="desc">Loads the host&rsquo;s resolver configuration; throws <code>DNSError.unsupportedPlatform</code> where unavailable.</p>
+      </div>
+    </div>
+
+    <div class="api-group">
+      <div class="api-letter"><span>T</span><div class="rule"></div></div>
+      <div class="api-item">
+        <div class="sig-line"><span class="sig">transfer<span class="arg">(zone: String, type: RRType, server: String)</span> <span class="ret">async throws → [any RR]</span></span><span class="owner">DNSClient</span></div>
+        <p class="desc">Performs a zone transfer (AXFR or IXFR) over TCP, streaming until the closing SOA.</p>
+      </div>
+    </div>
+
+    <div class="api-group">
+      <div class="api-letter"><span>U</span><div class="rule"></div></div>
+      <div class="api-item">
+        <div class="sig-line"><span class="sig">unpack<span class="arg">(from buf: inout MessageUnpacker)</span> <span class="ret">throws → Self</span></span><span class="owner">RR</span></div>
+        <p class="desc">Decodes a record of a known concrete type from a cursor.</p>
+      </div>
+      <div class="api-item">
+        <div class="sig-line"><span class="sig">unpackRR<span class="arg">(from buf: inout MessageUnpacker)</span> <span class="ret">throws → any RR</span></span><span class="owner">free function</span></div>
+        <p class="desc">Decodes any record from wire format, dispatching by type code (unknown types fall back to <code>RFC3597</code>).</p>
+      </div>
+    </div>
+
+    <div class="api-group">
+      <div class="api-letter"><span>V</span><div class="rule"></div></div>
+      <div class="api-item">
+        <div class="sig-line"><span class="sig">verify<span class="arg">(rrsig:rrset:key:)</span> <span class="ret">throws → Bool</span></span><span class="owner">DNSSEC · TSIG · SIG0</span></div>
+        <p class="desc">Verifies an RRSIG over an RRset, a TSIG on a message, or a SIG(0) signature.</p>
+      </div>
+    </div>
+
+    <div class="api-group">
+      <div class="api-letter"><span>W</span><div class="rule"></div></div>
+      <div class="api-item">
+        <div class="sig-line"><span class="sig">withLowercasedNames<span class="arg">()</span> <span class="ret">→ Self</span></span><span class="owner">RR</span></div>
+        <p class="desc">Returns a copy with rdata domain names lowercased — the DNSSEC canonical form (RFC 4034 §6.2).</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="bordered">
+    <div class="ack">
+      <p class="eyebrow">With gratitude</p>
+      <p>
+        DNSKit is a Swift port of <a href="https://github.com/miekg/dns"><strong>miekg/dns</strong></a>,
+        the definitive Go DNS library written by <span class="name">Miek Gieben</span>. Its lean,
+        less-is-more design, its exhaustive record support, and fifteen years of hard-won correctness
+        are the foundation everything here is built on. The API, the naming, and the wire behavior
+        all follow Miek&rsquo;s work — thank you.
+      </p>
+    </div>
+  </section>
+
+  <footer>
+    <div class="colophon">
+      DNSKit &middot; BSD-3-Clause, inherited from miekg/dns<br>
+      Cross-platform Swift · SwiftNIO · swift-crypto
+    </div>
+    <div class="colophon credit">
+      Swift conversion by Will Powers
+    </div>
+  </footer>
+
+</div>
+</body>
+</html>
