@@ -46,21 +46,19 @@ let records = try parseZone(zoneFileText, origin: "example.com.")
 ## Differential testing
 
 The port is verified byte-for-byte against the reference `miekg/dns`
-implementation. `oracle/` is a small Go program that packs records, messages,
-zone lines, DNSSEC signatures, TSIG, and updates with the real library and
-writes golden vectors under `Tests/`; the Swift test suite asserts identical
-output (and, for DNSSEC/TSIG, verifies the reference's signatures).
-
-The Go sources of the original library have been removed (this is now a pure
-Swift package); the pre-port state is preserved at the `go-oracle-source` git
-tag. To regenerate the vectors:
+implementation. Golden vectors — packed records, messages, zone lines, DNSSEC
+signatures, TSIG, and updates — are committed under `Tests/` as JSON; the Swift
+test suite asserts identical output (and, for DNSSEC/TSIG/SIG(0), verifies the
+reference's signatures). Running the tests requires no Go:
 
 ```sh
-cd oracle && go run .
+swift test   # 93 tests
 ```
 
-The oracle fetches upstream `miekg/dns` via its own `go.mod`, so no Go sources
-live in the package itself.
+The generator that produces those vectors (a small Go program using upstream
+`miekg/dns`) lives on the `feature/differential-test-engine` branch, keeping
+this package 100% Swift. The pre-port Go source is preserved at the
+`go-oracle-source` git tag.
 
 ## License
 
