@@ -42,7 +42,7 @@ final class ServerTests: XCTestCase {
 
         let client = DNSClient()
         let reply = try await client.query("host.example.com.", .a, server: "127.0.0.1", port: port,
-                                           useTCP: true, timeout: .seconds(2))
+                                           transport: .tcp, timeout: .seconds(2))
         XCTAssertEqual((reply.answers.first as? A)?.a.description, "192.0.2.20")
 
         try await client.shutdown()

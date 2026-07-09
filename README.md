@@ -6,10 +6,11 @@ A complete, cross-platform DNS library for Swift — a port of the Go
 [`miekg/dns`](https://github.com/miekg/dns) library. It supports client- and
 server-side programming: building and parsing messages, ~80 resource-record
 types, EDNS0, SVCB/HTTPS, zone-file parsing, DNSSEC signing/validation, TSIG,
-dynamic updates, and zone transfers.
+dynamic updates, zone transfers, and DNS-over-TLS (DoT).
 
-Built on [SwiftNIO](https://github.com/apple/swift-nio) for async networking and
-[swift-crypto](https://github.com/apple/swift-crypto) for DNSSEC — both of which
+Built on [SwiftNIO](https://github.com/apple/swift-nio) for async networking,
+[swift-nio-ssl](https://github.com/apple/swift-nio-ssl) for TLS, and
+[swift-crypto](https://github.com/apple/swift-crypto) for DNSSEC — all of which
 run on **macOS, iOS, and Linux**. There are no Apple-only framework dependencies
 (no `Security.framework`); the parsing, encoding, and data-model code is pure,
 platform-neutral Swift over `[UInt8]`/`Data`, and the one OS-specific facility
@@ -64,6 +65,14 @@ let reply = try await client.query("example.com.", .a, server: "8.8.8.8")
 print(reply)                       // dig-style output
 for case let a as A in reply.answers { print(a.a) }
 try await client.shutdown()
+```
+
+Or over DNS-over-TLS (RFC 7858), with the certificate verified against a name:
+
+```swift
+let reply = try await client.query(
+    "example.com.", .a,
+    server: "1.1.1.1", transport: .tls, serverName: "cloudflare-dns.com")
 ```
 
 Parse a record from zone text, or a whole zone file:

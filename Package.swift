@@ -15,6 +15,10 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.0"),
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.65.0"),
+        // TLS (DNS-over-TLS). NIOSSL vendors BoringSSL and runs on macOS, iOS,
+        // and Linux — one code path, no per-platform TLS stack. Capped below
+        // 2.36 to keep the Swift 6.0 tools-version baseline (2.37+ needs 6.1).
+        .package(url: "https://github.com/apple/swift-nio-ssl.git", "2.25.0"..<"2.36.0"),
         .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0"),
     ],
     targets: [
@@ -40,6 +44,8 @@ let package = Package(
             "DNSCore", "DNSTypes",
             .product(name: "NIOCore", package: "swift-nio"),
             .product(name: "NIOPosix", package: "swift-nio"),
+            .product(name: "NIOConcurrencyHelpers", package: "swift-nio"),
+            .product(name: "NIOSSL", package: "swift-nio-ssl"),
         ]),
 
         // DNS server (handler + mux + UDP/TCP listeners) on SwiftNIO.
@@ -48,6 +54,7 @@ let package = Package(
             .product(name: "NIOCore", package: "swift-nio"),
             .product(name: "NIOPosix", package: "swift-nio"),
             .product(name: "NIOConcurrencyHelpers", package: "swift-nio"),
+            .product(name: "NIOSSL", package: "swift-nio-ssl"),
         ]),
 
         // DNSSEC: key tags, DS digests, RRSIG signing/verification.
@@ -67,11 +74,13 @@ let package = Package(
             "DNSClient", "DNSCore", "DNSTypes",
             .product(name: "NIOCore", package: "swift-nio"),
             .product(name: "NIOPosix", package: "swift-nio"),
+            .product(name: "NIOSSL", package: "swift-nio-ssl"),
         ]),
         .testTarget(name: "DNSServerTests", dependencies: [
             "DNSServer", "DNSClient", "DNSCore", "DNSTypes",
             .product(name: "NIOCore", package: "swift-nio"),
             .product(name: "NIOPosix", package: "swift-nio"),
+            .product(name: "NIOSSL", package: "swift-nio-ssl"),
         ]),
         .testTarget(name: "DNSSECTests", dependencies: [
             "DNSSEC", "DNSCore", "DNSTypes",

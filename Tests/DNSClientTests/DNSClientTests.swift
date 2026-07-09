@@ -39,7 +39,7 @@ final class DNSClientTests: XCTestCase {
 
         let client = DNSClient()
         let reply = try await client.query("example.com.", .a, server: "127.0.0.1", port: port,
-                                           useTCP: true, timeout: .seconds(2))
+                                           transport: .tcp, timeout: .seconds(2))
         XCTAssertEqual((reply.answers.first as? A)?.a.description, "192.0.2.9")
 
         try await client.shutdown()
@@ -84,6 +84,23 @@ final class DNSClientTests: XCTestCase {
         } catch {
             try? await client.shutdown()
             throw XCTSkip("no outbound network / resolver unreachable: \(error)")
+        }
+    }
+
+    /// Real DNS-over-TLS query against Cloudflare's public resolver, with full
+    /// certificate verification. Skips when the environment has no outbound DoT.
+    func testLiveDoTQuery() async throws {
+        let client = DNSClient()
+        do {
+            let reply = try await client.query("example.com.", .a, server: "1.1.1.1",
+                                               transport: .tls, serverName: "cloudflare-dns.com",
+                                               timeout: .seconds(4))
+            XCTAssertTrue(reply.header.response)
+            XCTAssertTrue(reply.answers.contains { $0 is A })
+            try await client.shutdown()
+        } catch {
+            try? await client.shutdown()
+            throw XCTSkip("no outbound DoT / resolver unreachable: \(error)")
         }
     }
 

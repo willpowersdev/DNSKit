@@ -2,6 +2,8 @@ import DNSCore
 import DNSTypes
 import NIOCore
 import NIOPosix
+import NIOConcurrencyHelpers
+import NIOSSL
 
 public enum DNSClientError: Error, Sendable, Equatable {
     case timeout
@@ -10,22 +12,54 @@ public enum DNSClientError: Error, Sendable, Equatable {
     case noNameservers
 }
 
-/// An asynchronous DNS resolver over UDP and TCP, built on SwiftNIO.
+/// How a query is carried to the server.
+public enum DNSTransport: Sendable, Equatable {
+    /// Plain UDP (default). Falls back to TCP when the reply is truncated.
+    case udp
+    /// Plain TCP.
+    case tcp
+    /// DNS-over-TLS (RFC 7858): TCP wrapped in TLS, default port 853.
+    case tls
+
+    /// The IANA-assigned default port for this transport (53, or 853 for TLS).
+    public var defaultPort: Int { self == .tls ? 853 : 53 }
+    var streamed: Bool { self != .udp }
+}
+
+/// An asynchronous DNS resolver over UDP, TCP, and TLS (DoT), built on SwiftNIO.
 ///
 /// Exchanges a ``Msg`` with a server and returns the parsed reply. UDP queries
-/// automatically retry over TCP when the reply is truncated (TC bit).
+/// automatically retry over TCP when the reply is truncated (TC bit). TLS uses
+/// NIOSSL, which runs on Apple platforms and Linux alike.
 public final class DNSClient: Sendable {
     private let group: EventLoopGroup
     private let ownsGroup: Bool
+    private let tlsConfiguration: TLSConfiguration
+    private let tlsContext = NIOLockedValueBox<NIOSSLContext?>(nil)
 
-    public init() {
-        self.group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
-        self.ownsGroup = true
+    /// Creates a client. Provide a `tlsConfiguration` to customize DoT
+    /// certificate verification (the default verifies against the system trust
+    /// store); pass your own `group` to share an event loop.
+    public init(group: EventLoopGroup? = nil,
+                tlsConfiguration: TLSConfiguration = .makeClientConfiguration()) {
+        if let group {
+            self.group = group
+            self.ownsGroup = false
+        } else {
+            self.group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
+            self.ownsGroup = true
+        }
+        self.tlsConfiguration = tlsConfiguration
     }
 
-    public init(group: EventLoopGroup) {
-        self.group = group
-        self.ownsGroup = false
+    /// Lazily builds and caches the TLS context (parsing the trust store once).
+    private func sslContext() throws -> NIOSSLContext {
+        try tlsContext.withLockedValue { cached in
+            if let cached { return cached }
+            let context = try NIOSSLContext(configuration: tlsConfiguration)
+            cached = context
+            return context
+        }
     }
 
     /// Shuts down the owned event-loop group. No-op if a group was injected.
@@ -36,32 +70,40 @@ public final class DNSClient: Sendable {
     // MARK: High-level API
 
     /// Builds a recursive query for `name`/`type` and exchanges it with `server`.
-    public func query(_ name: String, _ type: RRType, server: String, port: Int = 53,
-                      useTCP: Bool = false, dnssecOK: Bool = false,
-                      timeout: TimeAmount = .seconds(5)) async throws -> Msg {
+    /// For `.tls`, `serverName` is the hostname the certificate is verified
+    /// against (defaults to `server`); pass it when connecting by IP.
+    public func query(_ name: String, _ type: RRType, server: String, port: Int? = nil,
+                      transport: DNSTransport = .udp, serverName: String? = nil,
+                      dnssecOK: Bool = false, timeout: TimeAmount = .seconds(5)) async throws -> Msg {
         var header = MsgHeader(id: UInt16.random(in: 0...UInt16.max))
         header.recursionDesired = true
         var msg = Msg(header: header, questions: [Question(Name(name).fqdn, type)])
         if dnssecOK {
             msg.additionals = [OPT(udpSize: 1232, dnssecOK: true)]
         }
-        return try await exchange(msg, server: server, port: port, useTCP: useTCP, timeout: timeout)
+        return try await exchange(msg, server: server, port: port, transport: transport,
+                                  serverName: serverName, timeout: timeout)
     }
 
-    /// Exchanges a fully-formed message with a server, retrying over TCP if the
-    /// UDP reply is truncated.
-    public func exchange(_ msg: Msg, server: String, port: Int = 53, useTCP: Bool = false,
+    /// Exchanges a fully-formed message with a server over the given transport,
+    /// retrying over TCP if a UDP reply is truncated.
+    public func exchange(_ msg: Msg, server: String, port: Int? = nil,
+                        transport: DNSTransport = .udp, serverName: String? = nil,
                         timeout: TimeAmount = .seconds(5)) async throws -> Msg {
-        let address = try resolve(host: server, port: port)
+        let address = try resolve(host: server, port: port ?? transport.defaultPort)
         let request = try msg.pack()
+        let hostname = serverName ?? server
 
-        let replyBytes = try await exchangeRaw(query: request, to: address, useTCP: useTCP, timeout: timeout)
+        let replyBytes = try await exchangeRaw(query: request, to: address, transport: transport,
+                                               serverName: hostname, timeout: timeout)
         guard !replyBytes.isEmpty else { throw DNSClientError.emptyResponse }
         var reply = try Msg(unpacking: replyBytes)
 
-        // Truncated UDP reply -> retry over TCP.
-        if !useTCP && reply.header.truncated {
-            let tcpBytes = try await exchangeRaw(query: request, to: address, useTCP: true, timeout: timeout)
+        // Truncated UDP reply -> retry over TCP (same host, port 53).
+        if transport == .udp && reply.header.truncated {
+            let tcpAddress = try resolve(host: server, port: port ?? 53)
+            let tcpBytes = try await exchangeRaw(query: request, to: tcpAddress, transport: .tcp,
+                                                 serverName: hostname, timeout: timeout)
             guard !tcpBytes.isEmpty else { throw DNSClientError.emptyResponse }
             reply = try Msg(unpacking: tcpBytes)
         }
@@ -107,23 +149,40 @@ public final class DNSClient: Sendable {
 
     // MARK: Wire exchange
 
-    private func exchangeRaw(query: [UInt8], to server: SocketAddress,
-                            useTCP: Bool, timeout: TimeAmount) async throws -> [UInt8] {
+    private func exchangeRaw(query: [UInt8], to server: SocketAddress, transport: DNSTransport,
+                            serverName: String, timeout: TimeAmount) async throws -> [UInt8] {
         let loop = group.next()
         let promise = loop.makePromise(of: [UInt8].self)
 
         let channel: Channel
-        if useTCP {
+        switch transport {
+        case .udp:
+            channel = try await DatagramBootstrap(group: group)
+                .channelOption(ChannelOptions.recvAllocator, value: FixedSizeRecvByteBufferAllocator(capacity: 4096))
+                .channelInitializer { ch in
+                    ch.pipeline.addHandler(UDPResponseHandler(promise: promise))
+                }
+                .connect(to: server).get()
+        case .tcp:
             channel = try await ClientBootstrap(group: group)
                 .channelInitializer { ch in
                     ch.pipeline.addHandler(TCPResponseHandler(promise: promise))
                 }
                 .connect(to: server).get()
-        } else {
-            channel = try await DatagramBootstrap(group: group)
-                .channelOption(ChannelOptions.recvAllocator, value: FixedSizeRecvByteBufferAllocator(capacity: 4096))
+        case .tls:
+            let context = try sslContext()
+            // TLS SNI / hostname verification can't use a bare IP address.
+            let sni: String? = (try? SocketAddress(ipAddress: serverName, port: 0)) != nil ? nil : serverName
+            channel = try await ClientBootstrap(group: group)
                 .channelInitializer { ch in
-                    ch.pipeline.addHandler(UDPResponseHandler(promise: promise))
+                    do {
+                        let tls = try NIOSSLClientHandler(context: context, serverHostname: sni)
+                        return ch.pipeline.addHandler(tls).flatMap {
+                            ch.pipeline.addHandler(TCPResponseHandler(promise: promise))
+                        }
+                    } catch {
+                        return ch.eventLoop.makeFailedFuture(error)
+                    }
                 }
                 .connect(to: server).get()
         }
@@ -132,8 +191,9 @@ public final class DNSClient: Sendable {
             promise.fail(DNSClientError.timeout)
         }
 
+        // TCP and TLS both frame the message with a 2-byte length prefix.
         var out = channel.allocator.buffer(capacity: query.count + 2)
-        if useTCP { out.writeInteger(UInt16(query.count)) }
+        if transport.streamed { out.writeInteger(UInt16(query.count)) }
         out.writeBytes(query)
 
         do {
