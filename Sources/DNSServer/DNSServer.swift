@@ -2,6 +2,7 @@ import DNSCore
 import DNSTypes
 import NIOCore
 import NIOPosix
+import NIOSSL
 
 /// An asynchronous DNS server listening on UDP and TCP, dispatching each
 /// request to a ``DNSResponder`` (e.g. a ``ServeMux``).
@@ -45,6 +46,24 @@ public actor DNSServer {
                 ch.pipeline.addHandler(TCPServerHandler(responder: responder))
             }
             .bind(host: host, port: effectivePort).get()
+        self.tcpChannel = tcp
+    }
+
+    /// Binds a DNS-over-TLS listener (RFC 7858): TCP wrapped in TLS. DoT is
+    /// TCP-only, so no UDP listener is created. Requires a `tlsConfiguration`
+    /// with the server's certificate chain and private key.
+    public func startTLS(host: String = "127.0.0.1", port: Int = 853,
+                        tlsConfiguration: TLSConfiguration) async throws {
+        let responder = self.responder
+        let sslContext = try NIOSSLContext(configuration: tlsConfiguration)
+        let tcp = try await ServerBootstrap(group: group)
+            .serverChannelOption(ChannelOptions.socketOption(.so_reuseaddr), value: 1)
+            .childChannelInitializer { ch in
+                ch.pipeline.addHandler(NIOSSLServerHandler(context: sslContext)).flatMap {
+                    ch.pipeline.addHandler(TCPServerHandler(responder: responder))
+                }
+            }
+            .bind(host: host, port: port).get()
         self.tcpChannel = tcp
     }
 

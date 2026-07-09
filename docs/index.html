@@ -351,7 +351,7 @@
     <div class="feature-grid">
       <div class="feature"><h3>Messages</h3><p>Build, pack, and parse queries and responses with full header and section control.</p></div>
       <div class="feature"><h3>Records</h3><p>~80 native record types, plus EDNS0, SVCB/HTTPS, and zone-file parsing.</p></div>
-      <div class="feature"><h3>Client &amp; Server</h3><p>Async resolver and authoritative server over UDP and TCP on SwiftNIO.</p></div>
+      <div class="feature"><h3>Client &amp; Server</h3><p>Async resolver and authoritative server over UDP, TCP, and TLS (DoT) on SwiftNIO.</p></div>
       <div class="feature"><h3>DNSSEC</h3><p>RRSIG signing and validation, DS, NSEC3, TSIG, and SIG(0) via swift-crypto.</p></div>
     </div>
   </section>
@@ -407,7 +407,7 @@ mux.<span class="fn">register</span>(<span class="s">"example.com."</span>, myHa
     <div class="api-group">
       <div class="api-letter"><span>E</span><div class="rule"></div></div>
       <div class="api-item">
-        <div class="sig-line"><span class="sig">exchange<span class="arg">(_ msg: Msg, server: String, useTCP: Bool)</span> <span class="ret">async throws → Msg</span></span><span class="owner">DNSClient</span></div>
+        <div class="sig-line"><span class="sig">exchange<span class="arg">(_ msg: Msg, server: String, transport: DNSTransport)</span> <span class="ret">async throws → Msg</span></span><span class="owner">DNSClient</span></div>
         <p class="desc">Sends a prepared message to a server and returns the reply, automatically retrying over TCP when a UDP answer is truncated.</p>
       </div>
     </div>
