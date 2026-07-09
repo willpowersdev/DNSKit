@@ -3,14 +3,14 @@ import PackageDescription
 import CompilerPluginSupport
 
 let package = Package(
-    name: "SwiftDNS",
+    name: "DNSKit",
+    // Minimum Apple OS versions. Linux has no such floor and is supported too;
+    // SwiftPM builds it whenever these platform constraints don't apply.
     platforms: [.macOS(.v13), .iOS(.v16)],
     products: [
-        .library(name: "DNSCore", targets: ["DNSCore"]),
-        .library(name: "DNSTypes", targets: ["DNSTypes"]),
-        .library(name: "DNSClient", targets: ["DNSClient"]),
-        .library(name: "DNSServer", targets: ["DNSServer"]),
-        .library(name: "DNSSEC", targets: ["DNSSEC"]),
+        // A single umbrella product: consumers `import DNSKit`. The internal
+        // modules below are implementation detail.
+        .library(name: "DNSKit", targets: ["DNSKit"]),
     ],
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.0"),
@@ -57,6 +57,10 @@ let package = Package(
             .product(name: "_CryptoExtras", package: "swift-crypto"),
         ]),
 
+        // Umbrella module: re-exports everything for a single `import DNSKit`.
+        .target(name: "DNSKit", dependencies: ["DNSCore", "DNSTypes", "DNSClient", "DNSServer", "DNSSEC"]),
+
+        .testTarget(name: "DNSKitTests", dependencies: ["DNSKit"]),
         .testTarget(name: "DNSCoreTests", dependencies: ["DNSCore"]),
         .testTarget(name: "DNSTypesTests", dependencies: ["DNSTypes", "DNSCore"]),
         .testTarget(name: "DNSClientTests", dependencies: [

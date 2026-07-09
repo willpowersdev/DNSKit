@@ -1,4 +1,5 @@
 import Foundation
+import DNSCore
 
 /// Parsed `resolv.conf` configuration (RFC-style), mirroring the fields the Go
 /// library's `clientconfig.go` exposes.
@@ -56,9 +57,31 @@ public struct ClientConfig: Sendable, Equatable {
         return Int(opt.dropFirst(prefix.count))
     }
 
-    /// Loads `/etc/resolv.conf` (or another path). Returns nil if unreadable.
+    /// Loads a resolv.conf-style file, returning nil if it can't be read.
     public static func fromSystem(path: String = "/etc/resolv.conf") -> ClientConfig? {
-        guard let text = try? String(contentsOfFile: path, encoding: .utf8) else { return nil }
-        return ClientConfig(parsing: text)
+        try? load(fromPath: path)
+    }
+
+    /// Loads the host's default resolver configuration.
+    ///
+    /// This is the one place that touches OS-specific facilities, so it is gated
+    /// by platform. On platforms without a resolver file it throws
+    /// ``DNSError/unsupportedPlatform``; everything else in the package is
+    /// platform-neutral.
+    public static func systemDefault() throws -> ClientConfig {
+        #if os(macOS) || os(iOS)
+        // Apple platforms: /etc/resolv.conf is present on macOS; on sandboxed
+        // iOS it may be unreadable, which surfaces as a thrown error.
+        return try load(fromPath: "/etc/resolv.conf")
+        #elseif os(Linux)
+        // Linux: /etc/resolv.conf is the canonical resolver configuration.
+        return try load(fromPath: "/etc/resolv.conf")
+        #else
+        throw DNSError.unsupportedPlatform
+        #endif
+    }
+
+    private static func load(fromPath path: String) throws -> ClientConfig {
+        ClientConfig(parsing: try String(contentsOfFile: path, encoding: .utf8))
     }
 }
