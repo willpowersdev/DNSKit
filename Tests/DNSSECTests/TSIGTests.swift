@@ -57,4 +57,13 @@ final class TSIGTests: XCTestCase {
         let tsig = try TSIG_.verify(rawMessage: signed.pack(), secret: secret)
         XCTAssertEqual(tsig.algorithm.value, "hmac-sha512.")
     }
+
+    func testSHA384RoundTrip() throws {
+        let secret = Array<UInt8>(repeating: 3, count: 24)
+        let msg = Msg(header: MsgHeader(id: 9), questions: [Question(Name("b.test."), .a)])
+        let signed = try TSIG_.sign(msg, keyName: Name("k2."), algorithm: .hmacSHA384,
+                                    secret: secret, timeSigned: 1_600_000_000)
+        let tsig = try TSIG_.verify(rawMessage: signed.pack(), secret: secret)
+        XCTAssertEqual(tsig.algorithm.value, "hmac-sha384.")
+    }
 }

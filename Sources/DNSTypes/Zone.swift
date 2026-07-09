@@ -193,8 +193,10 @@ public func parseZone(_ text: String, origin: String = ".", defaultTTL: UInt32 =
                 if tokens.count > 1 { currentOrigin = tokens[1].hasSuffix(".") ? tokens[1] : tokens[1] + "." }
             case "$TTL":
                 if tokens.count > 1, let ttl = UInt32(tokens[1]) { currentTTL = ttl }
+            case "$GENERATE":
+                records.append(contentsOf: try expandGenerate(tokens, origin: currentOrigin, defaultTTL: currentTTL))
             default:
-                break // $INCLUDE / $GENERATE not yet supported
+                break // $INCLUDE not yet supported
             }
             continue
         }
@@ -207,6 +209,72 @@ public func parseZone(_ text: String, origin: String = ".", defaultTTL: UInt32 =
         records.append(try newRR(tokens: tokens, origin: currentOrigin, defaultTTL: currentTTL))
     }
     return records
+}
+
+/// Expands a `$GENERATE start-stop[/step] lhs [ttl] [class] type rhs` directive
+/// (RFC 2308-style). Occurrences of `$` in the template are replaced by the
+/// iterator value; `${offset,width,base}` applies an offset and zero-padded
+/// width in decimal (d), hex (x/X), or octal (o).
+func expandGenerate(_ tokens: [String], origin: String, defaultTTL: UInt32) throws -> [any RR] {
+    guard tokens.count >= 4 else { throw ZoneError.empty }
+    let (start, stop, step) = try parseGenerateRange(tokens[1])
+    let template = Array(tokens[2...])
+    var out: [any RR] = []
+    var i = start
+    while (step > 0 && i <= stop) || (step < 0 && i >= stop) {
+        let substituted = template.map { substituteGenerate($0, value: i) }
+        out.append(try newRR(tokens: substituted, origin: origin, defaultTTL: defaultTTL))
+        i += step
+    }
+    return out
+}
+
+private func parseGenerateRange(_ s: String) throws -> (Int, Int, Int) {
+    let stepSplit = s.split(separator: "/", maxSplits: 1)
+    let step = stepSplit.count == 2 ? (Int(stepSplit[1]) ?? 1) : 1
+    let bounds = stepSplit[0].split(separator: "-", maxSplits: 1)
+    guard bounds.count == 2, let lo = Int(bounds[0]), let hi = Int(bounds[1]) else {
+        throw WireError.malformedText("bad $GENERATE range '\(s)'")
+    }
+    return (lo, hi, step == 0 ? 1 : step)
+}
+
+private func substituteGenerate(_ token: String, value: Int) -> String {
+    var out = ""
+    let chars = Array(token)
+    var i = 0
+    while i < chars.count {
+        guard chars[i] == "$" else { out.append(chars[i]); i += 1; continue }
+        i += 1
+        if i < chars.count, chars[i] == "{" {
+            // ${offset,width,base}
+            var spec = ""
+            i += 1
+            while i < chars.count, chars[i] != "}" { spec.append(chars[i]); i += 1 }
+            if i < chars.count { i += 1 } // consume '}'
+            let parts = spec.split(separator: ",", omittingEmptySubsequences: false).map(String.init)
+            let offset = parts.count > 0 ? (Int(parts[0]) ?? 0) : 0
+            let width = parts.count > 1 ? (Int(parts[1]) ?? 0) : 0
+            let base = parts.count > 2 ? parts[2] : "d"
+            out += formatGenerate(value + offset, width: width, base: base)
+        } else {
+            out += String(value)
+        }
+    }
+    return out
+}
+
+private func formatGenerate(_ value: Int, width: Int, base: String) -> String {
+    let radix: Int
+    switch base.lowercased() {
+    case "x": radix = 16
+    case "o": radix = 8
+    default: radix = 10
+    }
+    var s = String(value, radix: radix)
+    if base == "X" { s = s.uppercased() }
+    if s.count < width { s = String(repeating: "0", count: width - s.count) + s }
+    return s
 }
 
 /// Groups physical lines into logical records, joining lines inside unclosed

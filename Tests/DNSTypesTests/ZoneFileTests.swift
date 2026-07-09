@@ -42,6 +42,23 @@ final class ZoneFileTests: XCTestCase {
                        try nsec.packedBytes(compress: false))
     }
 
+    func testGenerateDirective() throws {
+        let zone = """
+        $ORIGIN example.com.
+        $GENERATE 1-3 host$ A 192.0.2.$
+        $GENERATE 10-11 srv${0,2,d} A 10.0.0.1
+        """
+        let records = try parseZone(zone)
+        XCTAssertEqual(records.count, 5)
+        XCTAssertEqual(records[0].header.name.value, "host1.example.com.")
+        XCTAssertEqual((records[0] as? A)?.a.description, "192.0.2.1")
+        XCTAssertEqual(records[2].header.name.value, "host3.example.com.")
+        XCTAssertEqual((records[2] as? A)?.a.description, "192.0.2.3")
+        // ${0,2,d} zero-pads to width 2.
+        XCTAssertEqual(records[3].header.name.value, "srv10.example.com.")
+        XCTAssertEqual(records[4].header.name.value, "srv11.example.com.")
+    }
+
     func testMsgDescription() {
         let msg = Msg(header: MsgHeader(id: 1234, response: true, recursionAvailable: true),
                       questions: [Question(Name("example.com."), .a)],

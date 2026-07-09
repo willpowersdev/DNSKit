@@ -7,6 +7,7 @@ import DNSTypes
 public enum TSIGAlgorithm: String, Sendable {
     case hmacSHA1 = "hmac-sha1."
     case hmacSHA256 = "hmac-sha256."
+    case hmacSHA384 = "hmac-sha384."
     case hmacSHA512 = "hmac-sha512."
 
     static func from(_ name: Name) -> TSIGAlgorithm? {
@@ -20,6 +21,8 @@ public enum TSIGAlgorithm: String, Sendable {
             return Array(HMAC<Insecure.SHA1>.authenticationCode(for: Data(data), using: symmetricKey))
         case .hmacSHA256:
             return Array(HMAC<SHA256>.authenticationCode(for: Data(data), using: symmetricKey))
+        case .hmacSHA384:
+            return Array(HMAC<SHA384>.authenticationCode(for: Data(data), using: symmetricKey))
         case .hmacSHA512:
             return Array(HMAC<SHA512>.authenticationCode(for: Data(data), using: symmetricKey))
         }
