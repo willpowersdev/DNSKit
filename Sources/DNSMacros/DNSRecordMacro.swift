@@ -24,7 +24,7 @@ private struct Field {
 /// text render/parse code). `.unsupported` fields make the whole record's
 /// presentation methods throw (deferred to a later milestone).
 private enum PresentationKind {
-    case integer, name, nameList, ipv4, ipv6, characterString, octet, txt, hex, base64, unsupported
+    case integer, name, nameList, ipv4, ipv6, characterString, octet, txt, hex, base64, typeBitmap, unsupported
 }
 
 private func presentationKind(_ f: Field) -> PresentationKind {
@@ -37,7 +37,7 @@ private func presentationKind(_ f: Field) -> PresentationKind {
     case "String": return f.octet ? .octet : .characterString
     case "[String]": return .txt
     case "[UInt8]": return f.sizeField != nil ? .unsupported : (f.base64 ? .base64 : .hex)
-    case "[UInt16]": return .unsupported
+    case "[UInt16]": return .typeBitmap
     default: return .unsupported
     }
 }
@@ -188,6 +188,7 @@ public struct DNSRecordMacro: MemberMacro {
         case .txt: return "self.\(f.name).map { dnsQuoteString($0) }.joined(separator: \" \")"
         case .hex: return "dnsRenderHex(self.\(f.name))"
         case .base64: return "dnsRenderBase64(self.\(f.name))"
+        case .typeBitmap: return "self.\(f.name).map { RRType.mnemonic(RRType(rawValue: $0)) }.joined(separator: \" \")"
         case .unsupported: return "\"\""
         }
     }
@@ -229,6 +230,17 @@ public struct DNSRecordMacro: MemberMacro {
             return "self.\(n) = try dnsParseHex(_t[_i...].joined()); _i = _t.count"
         case .base64:
             return "self.\(n) = try dnsParseBase64(_t[_i...].joined()); _i = _t.count"
+        case .typeBitmap:
+            return """
+            do {
+                var _b = [UInt16]()
+                for _tok in _t[_i...] {
+                    guard let _ty = RRType.fromMnemonic(_tok) else { throw WireError.malformedText("bad type '\\(_tok)'") }
+                    _b.append(_ty.rawValue)
+                }
+                self.\(n) = _b; _i = _t.count
+            }
+            """
         case .unsupported:
             return #"throw WireError.malformedText("unsupported field '\#(n)'")"#
         }

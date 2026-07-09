@@ -169,6 +169,8 @@ func main() {
 		"example.com. 3600 IN TLSA 3 1 1 000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
 		"example.com. 3600 IN SSHFP 1 1 00010203040506070809",
 		"example.com. 3600 IN CERT 1 1234 8 AAECAwQFBgcICQoLDA0ODxAREhM=",
+		"example.com. 3600 IN NSEC a.example.com. A MX RRSIG NSEC",
+		"example.com. 3600 IN CSYNC 66 3 A NS AAAA",
 	}
 	type zoneVec struct {
 		Line string `json:"line"`
@@ -287,6 +289,15 @@ func main() {
 	}
 	writeJSON("Tests/DNSTypesTests/oracle_update.json", map[string]string{
 		"wire": hex.EncodeToString(updWire),
+	})
+
+	// NSEC3 hashing (RFC 5155): miekg's HashName returns the base32hex hash.
+	nsec3 := dns.HashName("host.example.com.", dns.SHA1, 12, "aabbccdd")
+	writeJSON("Tests/DNSSECTests/oracle_nsec3.json", map[string]string{
+		"name":       "host.example.com.",
+		"saltHex":    "aabbccdd",
+		"iterations": "12",
+		"hash":       nsec3, // base32hex, uppercase
 	})
 }
 

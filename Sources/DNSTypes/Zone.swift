@@ -129,6 +129,8 @@ enum PresentationRegistry {
             RRType.rp.rawValue: p(RP.self), RRType.hinfo.rawValue: p(HINFO.self),
             RRType.afsdb.rawValue: p(AFSDB.self), RRType.dhcid.rawValue: p(DHCID.self),
             RRType.openpgpkey.rawValue: p(OPENPGPKEY.self),
+            RRType.nsec.rawValue: p(NSEC.self), RRType.csync.rawValue: p(CSYNC.self),
+            RRType.nxt.rawValue: p(NXT.self),
         ]
     }()
 }
@@ -139,7 +141,11 @@ enum PresentationRegistry {
 /// Grammar: `<name> [TTL] [CLASS] <TYPE> <rdata...>`. TTL and CLASS are optional
 /// and may appear in either order. `origin` qualifies relative names and `@`.
 public func NewRR(_ text: String, origin: String = ".", defaultTTL: UInt32 = 3600) throws -> any RR {
-    let tokens = lexPresentationLine(text)
+    try newRR(tokens: lexPresentationLine(text), origin: origin, defaultTTL: defaultTTL)
+}
+
+/// Builds a record from already-lexed tokens (owner first).
+func newRR(tokens: [String], origin: String, defaultTTL: UInt32) throws -> any RR {
     guard let owner = tokens.first else { throw ZoneError.empty }
     var idx = 1
 
@@ -165,4 +171,114 @@ public func NewRR(_ text: String, origin: String = ".", defaultTTL: UInt32 = 360
         throw ZoneError.unsupportedType(RRType.mnemonic(type))
     }
     return try parser(header, rdata, origin)
+}
+
+/// Parses a zone file into resource records. Supports multi-line records via
+/// parentheses, `$ORIGIN` and `$TTL` directives, blank-owner inheritance, and
+/// comments. (`$INCLUDE`/`$GENERATE` are not yet handled and are skipped.)
+public func parseZone(_ text: String, origin: String = ".", defaultTTL: UInt32 = 3600) throws -> [any RR] {
+    var currentOrigin = origin
+    var currentTTL = defaultTTL
+    var lastOwner: String? = nil
+    var records: [any RR] = []
+
+    for (line, ownerOmitted) in logicalLines(text) {
+        var tokens = lexPresentationLine(line)
+        guard let first = tokens.first else { continue }
+
+        if first.hasPrefix("$") {
+            switch first.uppercased() {
+            case "$ORIGIN":
+                if tokens.count > 1 { currentOrigin = tokens[1].hasSuffix(".") ? tokens[1] : tokens[1] + "." }
+            case "$TTL":
+                if tokens.count > 1, let ttl = UInt32(tokens[1]) { currentTTL = ttl }
+            default:
+                break // $INCLUDE / $GENERATE not yet supported
+            }
+            continue
+        }
+
+        if ownerOmitted {
+            guard let owner = lastOwner else { throw ZoneError.empty }
+            tokens.insert(owner, at: 0)
+        }
+        lastOwner = tokens[0]
+        records.append(try newRR(tokens: tokens, origin: currentOrigin, defaultTTL: currentTTL))
+    }
+    return records
+}
+
+/// Groups physical lines into logical records, joining lines inside unclosed
+/// parentheses. Returns each logical line with whether its owner was omitted
+/// (i.e. the first physical line began with whitespace).
+private func logicalLines(_ text: String) -> [(line: String, ownerOmitted: Bool)] {
+    var result: [(String, Bool)] = []
+    var depth = 0
+    var buffer = ""
+    var ownerOmitted = false
+
+    for rawLine in text.split(separator: "\n", omittingEmptySubsequences: false) {
+        let line = String(rawLine)
+        // Comments end at the physical newline, so strip them before joining
+        // continuation lines (otherwise an inline comment would swallow the
+        // rest of a multi-line record).
+        let cleaned = stripComment(line)
+        if depth == 0 {
+            buffer = cleaned
+            ownerOmitted = line.first.map { $0 == " " || $0 == "\t" } ?? false
+        } else {
+            buffer += " " + cleaned
+        }
+        depth += parenDelta(line)
+        if depth <= 0 {
+            depth = 0
+            if !lexPresentationLine(buffer).isEmpty { result.append((buffer, ownerOmitted)) }
+            buffer = ""
+        }
+    }
+    if !buffer.isEmpty, !lexPresentationLine(buffer).isEmpty { result.append((buffer, ownerOmitted)) }
+    return result
+}
+
+/// Removes an unquoted `;` comment from a physical line.
+private func stripComment(_ line: String) -> String {
+    var inQuote = false
+    var i = line.startIndex
+    while i < line.endIndex {
+        let c = line[i]
+        if inQuote {
+            if c == "\\" { i = line.index(after: i); if i >= line.endIndex { break } }
+            else if c == "\"" { inQuote = false }
+        } else if c == "\"" {
+            inQuote = true
+        } else if c == ";" {
+            return String(line[line.startIndex..<i])
+        }
+        i = line.index(after: i)
+    }
+    return line
+}
+
+/// Net parenthesis nesting change on a line, ignoring quotes and comments.
+private func parenDelta(_ line: String) -> Int {
+    var depth = 0
+    var inQuote = false
+    var i = line.startIndex
+    while i < line.endIndex {
+        let c = line[i]
+        if inQuote {
+            if c == "\\" { i = line.index(after: i) }
+            else if c == "\"" { inQuote = false }
+        } else {
+            switch c {
+            case "\"": inQuote = true
+            case ";": return depth // comment to end of line
+            case "(": depth += 1
+            case ")": depth -= 1
+            default: break
+            }
+        }
+        if i < line.endIndex { i = line.index(after: i) }
+    }
+    return depth
 }

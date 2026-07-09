@@ -78,9 +78,10 @@ final class ZoneTests: XCTestCase {
     }
 
     func testUnsupportedPresentationThrows() {
-        // NSEC has a type-bitmap field (presentation deferred) -> render throws.
-        let nsec = NSEC(header: RRHeader(name: Name("x."), type: .nsec, ttl: 60),
-                        nextDomain: Name("y."), typeBitMap: [1, 2])
-        XCTAssertThrowsError(try nsec.present())
+        // NSEC3 has size-prefixed fields (presentation deferred) -> render throws.
+        let nsec3 = NSEC3(header: RRHeader(name: Name("x."), type: .nsec3, ttl: 60),
+                          hash: 1, flags: 0, iterations: 12, saltLength: 0, salt: [],
+                          hashLength: 0, nextDomain: [], typeBitMap: [1, 2])
+        XCTAssertThrowsError(try nsec3.present())
     }
 }
