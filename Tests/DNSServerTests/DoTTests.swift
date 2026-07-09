@@ -62,4 +62,43 @@ final class DoTTests: XCTestCase {
         try await client.shutdown()
         try await server.shutdown()
     }
+
+    /// A single DoT connection (one TLS handshake) serving several queries.
+    func testDoTConnectionReuse() async throws {
+        let cert = try NIOSSLCertificate(bytes: Array(Self.certPEM.utf8), format: .pem)
+        let key = try NIOSSLPrivateKey(bytes: Array(Self.keyPEM.utf8), format: .pem)
+        let serverTLS = TLSConfiguration.makeServerConfiguration(
+            certificateChain: [.certificate(cert)], privateKey: .privateKey(key))
+
+        let mux = ServeMux()
+        mux.register(Name("secure.example."), HandlerFunc { request, _ in
+            var reply = request.makeReply()
+            let name = request.questions.first?.name ?? Name("secure.example.")
+            reply.answers = [A(header: RRHeader(name: name, type: .a, ttl: 60),
+                               a: IPv4Address("192.0.2.88"))]
+            return reply
+        })
+        let server = DNSServer(responder: mux)
+        try await server.startTLS(host: "127.0.0.1", port: 0, tlsConfiguration: serverTLS)
+        let port = await server.boundPort!
+
+        var clientTLS = TLSConfiguration.makeClientConfiguration()
+        clientTLS.certificateVerification = .none
+        let client = DNSClient(tlsConfiguration: clientTLS)
+
+        // Handshake once, then reuse the connection for several queries.
+        let connection = try await client.connect(to: "127.0.0.1", port: port, transport: .tls,
+                                                  timeout: .seconds(3))
+        for i in 0..<3 {
+            let query = Msg(header: MsgHeader(id: UInt16(200 + i)),
+                            questions: [Question(Name("host\(i).secure.example."), .a)])
+            let reply = try await connection.exchange(query, timeout: .seconds(3))
+            XCTAssertEqual(reply.header.id, UInt16(200 + i))
+            XCTAssertEqual((reply.answers.first as? A)?.a.description, "192.0.2.88")
+        }
+
+        await connection.close()
+        try await client.shutdown()
+        try await server.shutdown()
+    }
 }
