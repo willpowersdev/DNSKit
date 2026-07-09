@@ -305,6 +305,30 @@ func main() {
 		"wire": hex.EncodeToString(updWire),
 	})
 
+	// SIG(0) (RFC 2931): sign a message with miekg and emit the wire + key.
+	sig0Key := &dns.KEY{DNSKEY: dns.DNSKEY{Hdr: rh("example.com.", dns.TypeKEY, 0),
+		Flags: 256, Protocol: 3, Algorithm: dns.ECDSAP256SHA256}}
+	sig0Priv, err := sig0Key.Generate(256)
+	if err != nil {
+		panic(err)
+	}
+	sig0Msg := new(dns.Msg)
+	sig0Msg.Id = 0x1234
+	sig0Msg.SetQuestion("example.com.", dns.TypeA)
+	sig0 := &dns.SIG{RRSIG: dns.RRSIG{Algorithm: dns.ECDSAP256SHA256, KeyTag: sig0Key.KeyTag(),
+		SignerName: "example.com.", Inception: 1600000000, Expiration: 1700000000}}
+	sig0Wire, err := sig0.Sign(sig0Priv.(crypto.Signer), sig0Msg)
+	if err != nil {
+		panic(err)
+	}
+	// Emit the key material as a DNSKEY so the Swift side can unpack it directly.
+	sig0DNSKEY := &dns.DNSKEY{Hdr: rh("example.com.", dns.TypeDNSKEY, 0),
+		Flags: 256, Protocol: 3, Algorithm: dns.ECDSAP256SHA256, PublicKey: sig0Key.PublicKey}
+	writeJSON("../Tests/DNSSECTests/oracle_sig0.json", map[string]string{
+		"dnskey": hexOf(sig0DNSKEY),
+		"wire":   hex.EncodeToString(sig0Wire),
+	})
+
 	// NSEC3 hashing (RFC 5155): miekg's HashName returns the base32hex hash.
 	nsec3 := dns.HashName("host.example.com.", dns.SHA1, 12, "aabbccdd")
 	writeJSON("../Tests/DNSSECTests/oracle_nsec3.json", map[string]string{

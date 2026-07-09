@@ -112,29 +112,36 @@ public enum DNSSEC {
 
     /// Verifies an RRSIG over an RRset using a DNSKEY.
     public static func verify(rrsig: RRSIG, rrset: [any RR], key: DNSKEY) throws -> Bool {
-        let data = Data(try signingData(rrsig: rrsig, rrset: rrset))
-        switch rrsig.algorithm {
+        try verifyRaw(algorithm: rrsig.algorithm, publicKey: key.publicKey,
+                      signature: rrsig.signature, data: try signingData(rrsig: rrsig, rrset: rrset))
+    }
+
+    /// Verifies a signature over arbitrary data for a DNSSEC algorithm and
+    /// DNSKEY-format public key. Shared by RRSIG and SIG(0).
+    static func verifyRaw(algorithm: UInt8, publicKey: [UInt8], signature: [UInt8], data: [UInt8]) throws -> Bool {
+        let d = Data(data)
+        switch algorithm {
         case DNSSECAlgorithm.ecdsaP256SHA256:
-            let pub = try P256.Signing.PublicKey(rawRepresentation: Data(key.publicKey))
-            let sig = try P256.Signing.ECDSASignature(rawRepresentation: Data(rrsig.signature))
-            return pub.isValidSignature(sig, for: data)
+            let pub = try P256.Signing.PublicKey(rawRepresentation: Data(publicKey))
+            let sig = try P256.Signing.ECDSASignature(rawRepresentation: Data(signature))
+            return pub.isValidSignature(sig, for: d)
         case DNSSECAlgorithm.ecdsaP384SHA384:
-            let pub = try P384.Signing.PublicKey(rawRepresentation: Data(key.publicKey))
-            let sig = try P384.Signing.ECDSASignature(rawRepresentation: Data(rrsig.signature))
-            return pub.isValidSignature(sig, for: data)
+            let pub = try P384.Signing.PublicKey(rawRepresentation: Data(publicKey))
+            let sig = try P384.Signing.ECDSASignature(rawRepresentation: Data(signature))
+            return pub.isValidSignature(sig, for: d)
         case DNSSECAlgorithm.ed25519:
-            let pub = try Curve25519.Signing.PublicKey(rawRepresentation: Data(key.publicKey))
-            return pub.isValidSignature(Data(rrsig.signature), for: data)
+            let pub = try Curve25519.Signing.PublicKey(rawRepresentation: Data(publicKey))
+            return pub.isValidSignature(Data(signature), for: d)
         case DNSSECAlgorithm.rsaSHA256:
-            let pub = try rsaPublicKey(fromDNSKEY: key.publicKey)
-            let sig = _RSA.Signing.RSASignature(rawRepresentation: Data(rrsig.signature))
-            return pub.isValidSignature(sig, for: SHA256.hash(data: data), padding: .insecurePKCS1v1_5)
+            let pub = try rsaPublicKey(fromDNSKEY: publicKey)
+            let sig = _RSA.Signing.RSASignature(rawRepresentation: Data(signature))
+            return pub.isValidSignature(sig, for: SHA256.hash(data: d), padding: .insecurePKCS1v1_5)
         case DNSSECAlgorithm.rsaSHA512:
-            let pub = try rsaPublicKey(fromDNSKEY: key.publicKey)
-            let sig = _RSA.Signing.RSASignature(rawRepresentation: Data(rrsig.signature))
-            return pub.isValidSignature(sig, for: SHA512.hash(data: data), padding: .insecurePKCS1v1_5)
+            let pub = try rsaPublicKey(fromDNSKEY: publicKey)
+            let sig = _RSA.Signing.RSASignature(rawRepresentation: Data(signature))
+            return pub.isValidSignature(sig, for: SHA512.hash(data: d), padding: .insecurePKCS1v1_5)
         default:
-            throw DNSSECError.unsupportedAlgorithm(rrsig.algorithm)
+            throw DNSSECError.unsupportedAlgorithm(algorithm)
         }
     }
 
