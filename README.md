@@ -75,6 +75,23 @@ let reply = try await client.query(
     server: "1.1.1.1", transport: .tls, serverName: "cloudflare-dns.com")
 ```
 
+`query` and `exchange` are one-shot — they open a connection, send one message,
+and close it. To reuse a connection across many queries (and, for TLS, pay the
+handshake only once), open a persistent `DNSConnection` with `connect`:
+
+```swift
+let conn = try await client.connect(
+    to: "1.1.1.1", transport: .tls, serverName: "cloudflare-dns.com")
+
+for name in ["example.com.", "example.org."] {
+    var query = Msg(header: MsgHeader(id: .random(in: .min ... .max), recursionDesired: true),
+                    questions: [Question(Name(name), .a)])
+    let reply = try await conn.exchange(query)
+    print(reply.answers)
+}
+await conn.close()
+```
+
 Parse a record from zone text, or a whole zone file:
 
 ```swift
