@@ -186,7 +186,11 @@ public enum DNSSEC {
 }
 
 /// Produces a DNSSEC signature over the given data with a specific algorithm.
-public protocol DNSSECSigner: Sendable {
+///
+/// Not `Sendable`: it wraps a crypto private key, and swift-crypto's private-key
+/// types are not `Sendable` on Linux (unlike CryptoKit on Apple platforms).
+/// Signing is synchronous, so a signer never needs to cross a concurrency domain.
+public protocol DNSSECSigner {
     var algorithm: UInt8 { get }
     func signature(over data: [UInt8]) throws -> [UInt8]
 }
