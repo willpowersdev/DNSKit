@@ -69,7 +69,7 @@ try await client.shutdown()
 Parse a record from zone text, or a whole zone file:
 
 ```swift
-let rr = try NewRR("example.com. 3600 IN MX 10 mail.example.com.")
+let rr = try newRR("example.com. 3600 IN MX 10 mail.example.com.")
 let records = try parseZone(zoneFileText, origin: "example.com.")
 ```
 

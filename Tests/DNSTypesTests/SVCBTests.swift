@@ -64,7 +64,7 @@ final class SVCBTests: XCTestCase {
         XCTAssertTrue(text.contains("port=443"))
         XCTAssertTrue(text.contains("no-default-alpn"))
 
-        let reparsed = try NewRR(text)
+        let reparsed = try newRR(text)
         XCTAssertEqual(try reparsed.packedBytes(compress: false),
                        try https.packedBytes(compress: false))
     }

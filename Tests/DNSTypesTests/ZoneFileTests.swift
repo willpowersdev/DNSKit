@@ -34,10 +34,10 @@ final class ZoneFileTests: XCTestCase {
     }
 
     func testNSECBitmapRoundTripsThroughPresentation() throws {
-        let nsec = try NewRR("example.com. 3600 IN NSEC a.example.com. A MX RRSIG NSEC")
+        let nsec = try newRR("example.com. 3600 IN NSEC a.example.com. A MX RRSIG NSEC")
         let text = try nsec.present()
         XCTAssertTrue(text.contains("A MX RRSIG NSEC"))
-        let reparsed = try NewRR(text)
+        let reparsed = try newRR(text)
         XCTAssertEqual(try reparsed.packedBytes(compress: false),
                        try nsec.packedBytes(compress: false))
     }

@@ -2,7 +2,7 @@ import Foundation
 import DNSCore
 
 // Presentation (zone-file) format: a lexer for a single RR line, helpers used
-// by the macro-generated render/parse code, and NewRR for building a record
+// by the macro-generated render/parse code, and newRR for building a record
 // from its textual form. Full zone-file directives ($ORIGIN/$TTL/$INCLUDE/
 // $GENERATE, multi-line records) are a later increment.
 
@@ -98,7 +98,7 @@ public func lexPresentationLine(_ line: String) -> [String] {
     return tokens
 }
 
-// MARK: NewRR
+// MARK: newRR
 
 public enum ZoneError: Error, Sendable {
     case empty
@@ -137,16 +137,16 @@ enum PresentationRegistry {
 }
 
 /// Parses a single resource record from presentation format, e.g.
-/// `NewRR("example.com. 3600 IN MX 10 mail.example.com.")`.
+/// `newRR("example.com. 3600 IN MX 10 mail.example.com.")`.
 ///
 /// Grammar: `<name> [TTL] [CLASS] <TYPE> <rdata...>`. TTL and CLASS are optional
 /// and may appear in either order. `origin` qualifies relative names and `@`.
-public func NewRR(_ text: String, origin: String = ".", defaultTTL: UInt32 = 3600) throws -> any RR {
-    try newRR(tokens: lexPresentationLine(text), origin: origin, defaultTTL: defaultTTL)
+public func newRR(_ text: String, origin: String = ".", defaultTTL: UInt32 = 3600) throws -> any RR {
+    try buildRR(tokens: lexPresentationLine(text), origin: origin, defaultTTL: defaultTTL)
 }
 
 /// Builds a record from already-lexed tokens (owner first).
-func newRR(tokens: [String], origin: String, defaultTTL: UInt32) throws -> any RR {
+func buildRR(tokens: [String], origin: String, defaultTTL: UInt32) throws -> any RR {
     guard let owner = tokens.first else { throw ZoneError.empty }
     var idx = 1
 
@@ -206,7 +206,7 @@ public func parseZone(_ text: String, origin: String = ".", defaultTTL: UInt32 =
             tokens.insert(owner, at: 0)
         }
         lastOwner = tokens[0]
-        records.append(try newRR(tokens: tokens, origin: currentOrigin, defaultTTL: currentTTL))
+        records.append(try buildRR(tokens: tokens, origin: currentOrigin, defaultTTL: currentTTL))
     }
     return records
 }
@@ -223,7 +223,7 @@ func expandGenerate(_ tokens: [String], origin: String, defaultTTL: UInt32) thro
     var i = start
     while (step > 0 && i <= stop) || (step < 0 && i >= stop) {
         let substituted = template.map { substituteGenerate($0, value: i) }
-        out.append(try newRR(tokens: substituted, origin: origin, defaultTTL: defaultTTL))
+        out.append(try buildRR(tokens: substituted, origin: origin, defaultTTL: defaultTTL))
         i += step
     }
     return out

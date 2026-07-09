@@ -21,7 +21,7 @@ final class DNSKitTests: XCTestCase {
 
     /// Data-model / parser code is platform-neutral and works everywhere.
     func testPlatformNeutralParsing() throws {
-        let rr = try NewRR("example.com. 3600 IN MX 10 mail.example.com.")
+        let rr = try newRR("example.com. 3600 IN MX 10 mail.example.com.")
         XCTAssertEqual((rr as? MX)?.preference, 10)
 
         let config = ClientConfig(parsing: "nameserver 1.1.1.1\noptions ndots:2\n")

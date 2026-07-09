@@ -23,7 +23,7 @@ final class ZoneTests: XCTestCase {
 
     // MARK: Differential parse vs miekg
 
-    func testNewRRMatchesGoOracle() throws {
+    func testnewRRMatchesGoOracle() throws {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().appendingPathComponent("oracle_zone.json")
         let data = try Data(contentsOf: url)
@@ -32,7 +32,7 @@ final class ZoneTests: XCTestCase {
 
         for vec in vectors {
             let line = vec["line"]!, expected = vec["hex"]!
-            let rr = try NewRR(line)
+            let rr = try newRR(line)
             let got = hex(try rr.packedBytes(compress: false))
             XCTAssertEqual(got, expected, "parse mismatch vs miekg for line: \(line)")
         }
@@ -42,16 +42,16 @@ final class ZoneTests: XCTestCase {
 
     func testTTLAndClassOptionalAndReordered() throws {
         // TTL/class omitted -> defaults; class-before-TTL also accepted.
-        let a = try NewRR("host.example.com. A 10.0.0.1", defaultTTL: 300)
+        let a = try newRR("host.example.com. A 10.0.0.1", defaultTTL: 300)
         XCTAssertEqual(a.header.ttl, 300)
         XCTAssertEqual(a.header.class, .in)
-        let b = try NewRR("host.example.com. IN 60 A 10.0.0.2")
+        let b = try newRR("host.example.com. IN 60 A 10.0.0.2")
         XCTAssertEqual(b.header.ttl, 60)
         XCTAssertEqual((b as? A)?.a.description, "10.0.0.2")
     }
 
     func testRelativeNameQualifiedByOrigin() throws {
-        let rr = try NewRR("www 3600 IN A 192.0.2.7", origin: "example.com.")
+        let rr = try newRR("www 3600 IN A 192.0.2.7", origin: "example.com.")
         XCTAssertEqual(rr.header.name.value, "www.example.com.")
     }
 
@@ -70,10 +70,10 @@ final class ZoneTests: XCTestCase {
         ]
         for rr in records {
             let text = try rr.present()
-            let reparsed = try NewRR(text)
+            let reparsed = try newRR(text)
             XCTAssertEqual(hex(try reparsed.packedBytes(compress: false)),
                            hex(try rr.packedBytes(compress: false)),
-                           "present->NewRR round-trip failed for \(text)")
+                           "present->newRR round-trip failed for \(text)")
         }
     }
 
