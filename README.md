@@ -1,5 +1,7 @@
 # DNSKit
 
+[![CI](https://github.com/willpowersdev/DNSKit/actions/workflows/ci.yml/badge.svg)](https://github.com/willpowersdev/DNSKit/actions/workflows/ci.yml)
+
 A complete, cross-platform DNS library for Swift — a port of the Go
 [`miekg/dns`](https://github.com/miekg/dns) library. It supports client- and
 server-side programming: building and parsing messages, ~80 resource-record
@@ -13,6 +15,29 @@ run on **macOS, iOS, and Linux**. There are no Apple-only framework dependencies
 platform-neutral Swift over `[UInt8]`/`Data`, and the one OS-specific facility
 (loading the system resolver config) is isolated behind conditional compilation
 and throws `DNSError.unsupportedPlatform` where unavailable.
+
+## Requirements
+
+Swift 6.0+ · macOS 13+ / iOS 16+ / Linux.
+
+## Installation
+
+Add DNSKit to your `Package.swift` (track `master`, or pin a tagged release once
+one is published):
+
+```swift
+dependencies: [
+    .package(url: "https://github.com/willpowersdev/DNSKit.git", branch: "master"),
+],
+```
+
+then add the `DNSKit` product to your target:
+
+```swift
+.target(name: "YourTarget", dependencies: [
+    .product(name: "DNSKit", package: "DNSKit"),
+]),
+```
 
 ## Usage
 
@@ -57,7 +82,7 @@ test suite asserts identical output (and, for DNSSEC/TSIG/SIG(0), verifies the
 reference's signatures). Running the tests requires no Go:
 
 ```sh
-swift test   # 93 tests
+swift test   # 96 tests
 ```
 
 The generator that produces those vectors (a small Go program using upstream
@@ -67,12 +92,14 @@ this package 100% Swift. The pre-port Go source is preserved at the
 
 ## Platform support
 
-`swift build` and `swift test` work on macOS and Linux. The package declares
-minimum Apple OS versions (macOS 13, iOS 16); Linux has no such floor. All
-dependencies (SwiftNIO, swift-crypto, swift-syntax for the macro) are
-cross-platform, so no `#if canImport(...)` guards are needed around imports —
-only the handful of genuinely OS-specific operations use `#if os(...)` with a
-`DNSError.unsupportedPlatform` fallback.
+`swift build` and `swift test` run on macOS and Linux, and
+[CI](https://github.com/willpowersdev/DNSKit/actions/workflows/ci.yml) exercises
+both on every push (Linux in the official `swift:6.0` image; macOS with the
+latest Xcode). The package declares minimum Apple OS versions (macOS 13, iOS 16);
+Linux has no such floor. All dependencies (SwiftNIO, swift-crypto, swift-syntax
+for the macro) are cross-platform, so no `#if canImport(...)` guards are needed
+around imports — only the handful of genuinely OS-specific operations use
+`#if os(...)` with a `DNSError.unsupportedPlatform` fallback.
 
 ## License
 
