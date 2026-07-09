@@ -87,6 +87,9 @@ enum RRRegistry {
             RRType.svcb.rawValue: d(SVCB.self),
             RRType.https.rawValue: d(HTTPS.self),
             RRType.tsig.rawValue: d(TSIG.self),
+            RRType.ipseckey.rawValue: d(IPSECKEY.self),
+            RRType.amtrelay.rawValue: d(AMTRELAY.self),
+            RRType.apl.rawValue: d(APL.self),
         ]
     }()
 

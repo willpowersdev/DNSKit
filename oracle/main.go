@@ -108,6 +108,19 @@ func main() {
 	https.Value = []dns.SVCBKeyValue{&dns.SVCBAlpn{Alpn: []string{"h3"}}}
 	out["HTTPS"] = hexOf(https)
 
+	_, apl4, _ := net.ParseCIDR("192.0.2.0/24")
+	_, apl6, _ := net.ParseCIDR("2001:db8::/32")
+	out["APL"] = hexOf(&dns.APL{Hdr: h(dns.TypeAPL), Prefixes: []dns.APLPrefix{
+		{Negation: false, Network: *apl4},
+		{Negation: true, Network: *apl6},
+	}})
+	out["IPSECKEY"] = hexOf(&dns.IPSECKEY{Hdr: h(dns.TypeIPSECKEY), Precedence: 10, GatewayType: 1,
+		Algorithm: 2, GatewayAddr: net.ParseIP("192.0.2.38").To4(), PublicKey: b64(seq(16))})
+	out["IPSECKEY_HOST"] = hexOf(&dns.IPSECKEY{Hdr: h(dns.TypeIPSECKEY), Precedence: 10, GatewayType: 3,
+		Algorithm: 2, GatewayHost: "gw.example.com.", PublicKey: b64(seq(16))})
+	out["AMTRELAY"] = hexOf(&dns.AMTRELAY{Hdr: h(dns.TypeAMTRELAY), Precedence: 5, GatewayType: 2,
+		GatewayAddr: net.ParseIP("2001:db8::1")})
+
 	writeJSON("../Tests/DNSTypesTests/oracle.json", out)
 
 	// Full messages: emit both compressed and uncompressed wire bytes. The

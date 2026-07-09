@@ -70,6 +70,16 @@ final class DifferentialTests: XCTestCase {
             "HTTPS": HTTPS(header: hdr(.https), priority: 0, target: Name("."), values: [
                 SVCBAlpn(alpn: ["h3"]),
             ]),
+            "APL": APL(header: hdr(.apl), prefixes: [
+                APLPrefix(family: 1, prefix: 24, negation: false, afdPart: [192, 0, 2]),
+                APLPrefix(family: 2, prefix: 32, negation: true, afdPart: [0x20, 0x01, 0x0d, 0xb8]),
+            ]),
+            "IPSECKEY": IPSECKEY(header: hdr(.ipseckey), precedence: 10, algorithm: 2,
+                                 gateway: .ipv4(IPv4Address("192.0.2.38")), publicKey: bytes(16)),
+            "IPSECKEY_HOST": IPSECKEY(header: hdr(.ipseckey), precedence: 10, algorithm: 2,
+                                      gateway: .host(Name("gw.example.com.")), publicKey: bytes(16)),
+            "AMTRELAY": AMTRELAY(header: hdr(.amtrelay), precedence: 5, discovery: false,
+                                 gateway: .ipv6(IPv6Address("2001:db8::1"))),
         ]
     }
 
