@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [ master, swift-port ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    # Linux runs inside the official Swift image; macOS runs directly on the
+    # runner (empty container => no container).
+    container: ${{ matrix.container }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux (Swift 6.0)
+            os: ubuntu-latest
+            container: swift:6.0
+          - name: macOS (latest Xcode)
+            os: macos-15
+            container: ''
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode (Swift 6)
+        if: runner.os == 'macOS'
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Swift version
+        run: swift --version
+
+      - name: Build
+        run: swift build
+
+      - name: Test
+        run: swift test
