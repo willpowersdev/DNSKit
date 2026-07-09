@@ -51,6 +51,24 @@ final class SVCBTests: XCTestCase {
         XCTAssertEqual(local.data, [9, 8, 7])
     }
 
+    func testPresentationRenderParseRoundTrip() throws {
+        let https = HTTPS(header: RRHeader(name: Name("example.com."), type: .https, ttl: 3600),
+                          priority: 1, target: Name("."), values: [
+            SVCBAlpn(alpn: ["h2", "h3"]),
+            SVCBPort(port: 443),
+            SVCBIPv4Hint(hints: [IPv4Address("192.0.2.1")]),
+            SVCBNoDefaultAlpn(),
+        ])
+        let text = try https.present()
+        XCTAssertTrue(text.contains("alpn=\"h2,h3\""))
+        XCTAssertTrue(text.contains("port=443"))
+        XCTAssertTrue(text.contains("no-default-alpn"))
+
+        let reparsed = try NewRR(text)
+        XCTAssertEqual(try reparsed.packedBytes(compress: false),
+                       try https.packedBytes(compress: false))
+    }
+
     func testRejectsDuplicateKeys() {
         let svcb = SVCB(header: RRHeader(name: Name("x."), type: .svcb, ttl: 60),
                         priority: 1, target: Name("."),

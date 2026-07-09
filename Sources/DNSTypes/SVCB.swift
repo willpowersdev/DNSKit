@@ -161,6 +161,119 @@ enum SVCBRegistry {
     }
 }
 
+// MARK: Presentation (RFC 9460 §2.1)
+
+func svcbKeyName(_ code: UInt16) -> String {
+    switch code {
+    case SVCBKey.mandatory: return "mandatory"
+    case SVCBKey.alpn: return "alpn"
+    case SVCBKey.noDefaultAlpn: return "no-default-alpn"
+    case SVCBKey.port: return "port"
+    case SVCBKey.ipv4hint: return "ipv4hint"
+    case SVCBKey.ech: return "ech"
+    case SVCBKey.ipv6hint: return "ipv6hint"
+    case SVCBKey.dohpath: return "dohpath"
+    case SVCBKey.ohttp: return "ohttp"
+    default: return "key\(code)"
+    }
+}
+
+func svcbKeyFromName(_ s: String) -> UInt16? {
+    switch s.lowercased() {
+    case "mandatory": return SVCBKey.mandatory
+    case "alpn": return SVCBKey.alpn
+    case "no-default-alpn": return SVCBKey.noDefaultAlpn
+    case "port": return SVCBKey.port
+    case "ipv4hint": return SVCBKey.ipv4hint
+    case "ech": return SVCBKey.ech
+    case "ipv6hint": return SVCBKey.ipv6hint
+    case "dohpath": return SVCBKey.dohpath
+    case "ohttp": return SVCBKey.ohttp
+    default:
+        if s.lowercased().hasPrefix("key"), let n = UInt16(s.dropFirst(3)) { return n }
+        return nil
+    }
+}
+
+/// Presentation value text for a param, or nil for valueless params.
+private func svcbValueText(_ v: any SVCBValue) -> String? {
+    switch v {
+    case let m as SVCBMandatory: return m.codes.map { svcbKeyName($0) }.joined(separator: ",")
+    case let a as SVCBAlpn: return "\"" + a.alpn.joined(separator: ",") + "\""
+    case let p as SVCBPort: return String(p.port)
+    case let h as SVCBIPv4Hint: return h.hints.map { $0.description }.joined(separator: ",")
+    case let h as SVCBIPv6Hint: return h.hints.map { $0.description }.joined(separator: ",")
+    case let e as SVCBECHConfig: return dnsRenderBase64(e.ech)
+    case let d as SVCBDoHPath: return "\"" + d.template + "\""
+    case is SVCBNoDefaultAlpn, is SVCBOhttp: return nil
+    case let l as SVCBLocal: return dnsRenderHex(l.data)
+    default: return nil
+    }
+}
+
+private func parseSVCBValue(key: UInt16, text: String?) throws -> any SVCBValue {
+    func req() throws -> String {
+        guard let text else { throw WireError.malformedText("svcb: missing value for key \(key)") }
+        return text
+    }
+    switch key {
+    case SVCBKey.mandatory:
+        let codes = try req().split(separator: ",").compactMap { svcbKeyFromName(String($0)) }
+        return SVCBMandatory(codes: codes)
+    case SVCBKey.alpn:
+        return SVCBAlpn(alpn: try req().split(separator: ",").map(String.init))
+    case SVCBKey.noDefaultAlpn:
+        return SVCBNoDefaultAlpn()
+    case SVCBKey.port:
+        guard let p = UInt16(try req()) else { throw WireError.malformedText("svcb: bad port") }
+        return SVCBPort(port: p)
+    case SVCBKey.ipv4hint:
+        return SVCBIPv4Hint(hints: try req().split(separator: ",").compactMap { IPv4Address(String($0)) })
+    case SVCBKey.ipv6hint:
+        return SVCBIPv6Hint(hints: try req().split(separator: ",").compactMap { IPv6Address(String($0)) })
+    case SVCBKey.ech:
+        return SVCBECHConfig(ech: try dnsParseBase64(try req()))
+    case SVCBKey.dohpath:
+        return SVCBDoHPath(template: try req())
+    case SVCBKey.ohttp:
+        return SVCBOhttp()
+    default:
+        return SVCBLocal(key: key, data: try dnsParseHex(try req()))
+    }
+}
+
+/// Renders SVCB/HTTPS rdata: `priority target [key=value ...]` (params sorted).
+private func renderSVCBRdata(priority: UInt16, target: Name, values: [any SVCBValue]) -> String {
+    var parts = [String(priority), target.value]
+    for v in values.sorted(by: { $0.key < $1.key }) {
+        let name = svcbKeyName(v.key)
+        if let value = svcbValueText(v) { parts.append("\(name)=\(value)") } else { parts.append(name) }
+    }
+    return parts.joined(separator: " ")
+}
+
+/// Parses `priority target [key=value ...]` tokens into SVCB/HTTPS fields.
+private func parseSVCBTokens(_ tokens: [String], origin: String) throws -> (UInt16, Name, [any SVCBValue]) {
+    guard tokens.count >= 2, let priority = UInt16(tokens[0]) else {
+        throw WireError.malformedText("svcb: expected priority and target")
+    }
+    let target = dnsQualify(tokens[1], origin: origin)
+    var values: [any SVCBValue] = []
+    for token in tokens[2...] {
+        let key: String
+        let value: String?
+        if let eq = token.firstIndex(of: "=") {
+            key = String(token[token.startIndex..<eq])
+            value = String(token[token.index(after: eq)...])
+        } else {
+            key = token; value = nil
+        }
+        guard let code = svcbKeyFromName(key) else { throw WireError.malformedText("svcb: unknown key '\(key)'") }
+        values.append(try parseSVCBValue(key: code, text: value))
+    }
+    return (priority, target, values)
+}
+
 // Shared rdata codec for SVCB and HTTPS (identical wire format).
 private func packSVCBRdata(priority: UInt16, target: Name, values: [any SVCBValue],
                           into buf: inout MessagePacker) throws {
@@ -212,7 +325,11 @@ public struct SVCB: RR {
         self.header = header
     }
     public init(header: RRHeader, rdataTokens tokens: [String], origin: String) throws {
-        throw WireError.malformedText("presentation parsing not supported for SVCB")
+        (priority, target, values) = try parseSVCBTokens(tokens, origin: origin)
+        self.header = header
+    }
+    public func rdataPresentation() -> String {
+        renderSVCBRdata(priority: priority, target: target, values: values)
     }
 }
 
@@ -234,6 +351,10 @@ public struct HTTPS: RR {
         self.header = header
     }
     public init(header: RRHeader, rdataTokens tokens: [String], origin: String) throws {
-        throw WireError.malformedText("presentation parsing not supported for HTTPS")
+        (priority, target, values) = try parseSVCBTokens(tokens, origin: origin)
+        self.header = header
+    }
+    public func rdataPresentation() -> String {
+        renderSVCBRdata(priority: priority, target: target, values: values)
     }
 }

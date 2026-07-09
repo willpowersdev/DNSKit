@@ -185,6 +185,8 @@ func main() {
 		"example.com. 3600 IN CERT 1 1234 8 AAECAwQFBgcICQoLDA0ODxAREhM=",
 		"example.com. 3600 IN NSEC a.example.com. A MX RRSIG NSEC",
 		"example.com. 3600 IN CSYNC 66 3 A NS AAAA",
+		`example.com. 3600 IN HTTPS 1 . alpn="h2,h3" port=443 ipv4hint=192.0.2.1,192.0.2.2`,
+		"example.com. 3600 IN SVCB 16 svc.example.com. mandatory=alpn alpn=h2 ipv6hint=2001:db8::1",
 	}
 	type zoneVec struct {
 		Line string `json:"line"`

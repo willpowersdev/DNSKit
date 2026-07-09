@@ -131,6 +131,7 @@ enum PresentationRegistry {
             RRType.openpgpkey.rawValue: p(OPENPGPKEY.self),
             RRType.nsec.rawValue: p(NSEC.self), RRType.csync.rawValue: p(CSYNC.self),
             RRType.nxt.rawValue: p(NXT.self),
+            RRType.svcb.rawValue: p(SVCB.self), RRType.https.rawValue: p(HTTPS.self),
         ]
     }()
 }
