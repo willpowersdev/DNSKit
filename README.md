@@ -1,214 +1,79 @@
-[![Build Status](https://travis-ci.org/miekg/dns.svg?branch=master)](https://travis-ci.org/miekg/dns)
-[![Code Coverage](https://img.shields.io/codecov/c/github/miekg/dns/master.svg)](https://codecov.io/github/miekg/dns?branch=master)
-[![Go Report Card](https://goreportcard.com/badge/github.com/miekg/dns)](https://goreportcard.com/report/miekg/dns)
-[![](https://godoc.org/github.com/miekg/dns?status.svg)](https://godoc.org/github.com/miekg/dns)
+# DNSKit
 
-DNS version 2 is now available at <https://codeberg.org/miekg/dns>. This version should be 2x faster across
-the board. Further optimizations welcome.
+A complete, cross-platform DNS library for Swift — a port of the Go
+[`miekg/dns`](https://github.com/miekg/dns) library. It supports client- and
+server-side programming: building and parsing messages, ~80 resource-record
+types, EDNS0, SVCB/HTTPS, zone-file parsing, DNSSEC signing/validation, TSIG,
+dynamic updates, and zone transfers.
 
-The version here will only see specific fixes and nothing else. At some point this repo will be archived.
+Built on [SwiftNIO](https://github.com/apple/swift-nio) for async networking and
+[swift-crypto](https://github.com/apple/swift-crypto) for DNSSEC — both of which
+run on **macOS, iOS, and Linux**. There are no Apple-only framework dependencies
+(no `Security.framework`); the parsing, encoding, and data-model code is pure,
+platform-neutral Swift over `[UInt8]`/`Data`, and the one OS-specific facility
+(loading the system resolver config) is isolated behind conditional compilation
+and throws `DNSError.unsupportedPlatform` where unavailable.
 
-# Alternative (more granular) approach to a DNS library
+## Usage
 
-> Less is more.
+Consumers import a single umbrella module:
 
-Complete and usable DNS library. All Resource Records are supported, including the DNSSEC types.
-It follows a lean and mean philosophy. If there is stuff you should know as a DNS programmer there
-isn't a convenience function for it. Server side and client side programming is supported, i.e. you
-can build servers and resolvers with it.
+```swift
+import DNSKit
+```
 
-We try to keep the "master" branch as sane as possible and at the bleeding edge of standards,
-avoiding breaking changes wherever reasonable. We support the last two versions of Go.
+Internally the package is split into focused modules — `DNSCore` (wire
+primitives), `DNSTypes` (the `RR` model, `Msg`, EDNS0, SVCB, zone parsing),
+`DNSClient`, `DNSServer`, and `DNSSEC` — but these are implementation detail
+re-exported through `DNSKit`. Record wire codecs and presentation (zone-text)
+forms are generated at compile time by the `@DNSRecord` macro from each record's
+fields — the Swift equivalent of the Go library's `go generate` step.
 
-# Goals
+## Quick start
 
-- KISS;
-- Fast;
-- Small API. If it's easy to code in Go, don't make a function for it.
+```swift
+import DNSKit
 
-# Users
+let client = DNSClient()
+let reply = try await client.query("example.com.", .a, server: "8.8.8.8")
+print(reply)                       // dig-style output
+for case let a as A in reply.answers { print(a.a) }
+try await client.shutdown()
+```
 
-A not-so-up-to-date-list-that-may-be-actually-current:
+Parse a record from zone text, or a whole zone file:
 
-- https://github.com/coredns/coredns
-- https://github.com/abh/geodns
-- https://github.com/baidu/bfe
-- http://www.statdns.com/
-- http://www.dnsinspect.com/
-- https://github.com/chuangbo/jianbing-dictionary-dns
-- http://www.dns-lg.com/
-- https://github.com/fcambus/rrda
-- https://github.com/kenshinx/godns
-- https://github.com/skynetservices/skydns
-- https://github.com/hashicorp/consul
-- https://github.com/DevelopersPL/godnsagent
-- https://github.com/duedil-ltd/discodns
-- https://github.com/StalkR/dns-reverse-proxy
-- https://github.com/tianon/rawdns
-- https://mesosphere.github.io/mesos-dns/
-- https://github.com/fcambus/statzone
-- https://github.com/benschw/dns-clb-go
-- https://github.com/corny/dnscheck for <http://public-dns.info/>
-- https://github.com/miekg/unbound
-- https://github.com/miekg/exdns
-- https://dnslookup.org
-- https://github.com/looterz/grimd
-- https://github.com/phamhongviet/serf-dns
-- https://github.com/mehrdadrad/mylg
-- https://github.com/bamarni/dockness
-- https://github.com/fffaraz/microdns
-- https://github.com/ipdcode/hades <https://jd.com>
-- https://github.com/StackExchange/dnscontrol/
-- https://www.dnsperf.com/
-- https://dnssectest.net/
-- https://github.com/oif/apex
-- https://github.com/jedisct1/dnscrypt-proxy (migrated to v2)
-- https://github.com/jedisct1/rpdns
-- https://github.com/xor-gate/sshfp
-- https://github.com/rs/dnstrace
-- https://blitiri.com.ar/p/dnss ([github mirror](https://github.com/albertito/dnss))
-- https://render.com
-- https://github.com/peterzen/goresolver
-- https://github.com/folbricht/routedns
-- https://domainr.com/
-- https://zonedb.org/
-- https://router7.org/
-- https://github.com/fortio/dnsping
-- https://github.com/Luzilla/dnsbl_exporter
-- https://github.com/bodgit/tsig
-- https://github.com/v2fly/v2ray-core (test only)
-- https://kuma.io/
-- https://www.misaka.io/services/dns
-- https://ping.sx/dig
-- https://fleetdeck.io/
-- https://github.com/markdingo/autoreverse
-- https://github.com/slackhq/nebula
-- https://addr.tools/
-- https://dnscheck.tools/
-- https://github.com/egbakou/domainverifier
-- https://github.com/semihalev/sdns
-- https://github.com/wintbiit/NineDNS
-- https://linuxcontainers.org/incus/
-- https://ifconfig.es
-- https://github.com/zmap/zdns
-- https://framagit.org/bortzmeyer/check-soa
-- https://github.com/jkerdreux-imt/owns
+```swift
+let rr = try NewRR("example.com. 3600 IN MX 10 mail.example.com.")
+let records = try parseZone(zoneFileText, origin: "example.com.")
+```
 
-Send pull request if you want to be listed here.
+## Differential testing
 
-# Features
+The port is verified byte-for-byte against the reference `miekg/dns`
+implementation. Golden vectors — packed records, messages, zone lines, DNSSEC
+signatures, TSIG, and updates — are committed under `Tests/` as JSON; the Swift
+test suite asserts identical output (and, for DNSSEC/TSIG/SIG(0), verifies the
+reference's signatures). Running the tests requires no Go:
 
-- UDP/TCP queries, IPv4 and IPv6
-- RFC 1035 zone file parsing ($INCLUDE, $ORIGIN, $TTL and $GENERATE (for all record types) are supported
-- Fast
-- Server side programming (mimicking the net/http package)
-- Client side programming
-- DNSSEC: signing, validating and key generation for DSA, RSA, ECDSA and Ed25519
-- EDNS0, NSID, Cookies
-- AXFR/IXFR
-- TSIG, SIG(0)
-- DNS over TLS (DoT): encrypted connection between client and server over TCP
-- DNS name compression
+```sh
+swift test   # 93 tests
+```
 
-Have fun!
+The generator that produces those vectors (a small Go program using upstream
+`miekg/dns`) lives on the `feature/differential-test-engine` branch, keeping
+this package 100% Swift. The pre-port Go source is preserved at the
+`go-oracle-source` git tag.
 
-Miek Gieben - 2010-2012 - <miek@miek.nl>
-DNS Authors 2012-
+## Platform support
 
-# Building
+`swift build` and `swift test` work on macOS and Linux. The package declares
+minimum Apple OS versions (macOS 13, iOS 16); Linux has no such floor. All
+dependencies (SwiftNIO, swift-crypto, swift-syntax for the macro) are
+cross-platform, so no `#if canImport(...)` guards are needed around imports —
+only the handful of genuinely OS-specific operations use `#if os(...)` with a
+`DNSError.unsupportedPlatform` fallback.
 
-This library uses Go modules and uses semantic versioning. Building is done with the `go` tool, so
-the following should work:
+## License
 
-    go get github.com/miekg/dns
-    go build github.com/miekg/dns
-
-## Examples
-
-A short "how to use the API" is at the beginning of doc.go (this also will show when you call `godoc
-github.com/miekg/dns`).
-
-Example programs can be found in the `github.com/miekg/exdns` repository.
-
-## Supported RFCs
-
-_all of them_
-
-- 103{4,5} - DNS standard
-- 1183 - ISDN, X25 and other deprecated records
-- 1348 - NSAP record (removed the record)
-- 1982 - Serial Arithmetic
-- 1876 - LOC record
-- 1995 - IXFR
-- 1996 - DNS notify
-- 2136 - DNS Update (dynamic updates)
-- 2181 - RRset definition - there is no RRset type though, just []RR
-- 2537 - RSAMD5 DNS keys
-- 2065 - DNSSEC (updated in later RFCs)
-- 2671 - EDNS record
-- 2782 - SRV record
-- 2845 - TSIG record
-- 2915 - NAPTR record
-- 2929 - DNS IANA Considerations
-- 3110 - RSASHA1 DNS keys
-- 3123 - APL record
-- 3225 - DO bit (DNSSEC OK)
-- 340{1,2,3} - NAPTR record
-- 3445 - Limiting the scope of (DNS)KEY
-- 3596 - AAAA record
-- 3597 - Unknown RRs
-- 4025 - A Method for Storing IPsec Keying Material in DNS
-- 403{3,4,5} - DNSSEC + validation functions
-- 4255 - SSHFP record
-- 4343 - Case insensitivity
-- 4408 - SPF record
-- 4509 - SHA256 Hash in DS
-- 4592 - Wildcards in the DNS
-- 4635 - HMAC SHA TSIG
-- 4701 - DHCID
-- 4892 - id.server
-- 5001 - NSID
-- 5155 - NSEC3 record
-- 5205 - HIP record
-- 5702 - SHA2 in the DNS
-- 5936 - AXFR
-- 5966 - TCP implementation recommendations
-- 6605 - ECDSA
-- 6725 - IANA Registry Update
-- 6742 - ILNP DNS
-- 6840 - Clarifications and Implementation Notes for DNS Security
-- 6844 - CAA record
-- 6891 - EDNS0 update
-- 6895 - DNS IANA considerations
-- 6944 - DNSSEC DNSKEY Algorithm Status
-- 6975 - Algorithm Understanding in DNSSEC
-- 7043 - EUI48/EUI64 records
-- 7314 - DNS (EDNS) EXPIRE Option
-- 7477 - CSYNC RR
-- 7828 - edns-tcp-keepalive EDNS0 Option
-- 7553 - URI record
-- 7858 - DNS over TLS: Initiation and Performance Considerations
-- 7871 - EDNS0 Client Subnet
-- 7873 - Domain Name System (DNS) Cookies
-- 8080 - EdDSA for DNSSEC
-- 8490 - DNS Stateful Operations
-- 8499 - DNS Terminology
-- 8659 - DNS Certification Authority Authorization (CAA) Resource Record
-- 8777 - DNS Reverse IP Automatic Multicast Tunneling (AMT) Discovery
-- 8914 - Extended DNS Errors
-- 8976 - Message Digest for DNS Zones (ZONEMD RR)
-- 9460 - Service Binding and Parameter Specification via the DNS
-- 9461 - Service Binding Mapping for DNS Servers
-- 9462 - Discovery of Designated Resolvers
-- 9460 - SVCB and HTTPS Records
-- 9567 - DNS Error Reporting
-- 9606 - DNS Resolver Information
-- 9660 - DNS Zone Version (ZONEVERSION) Option
-- Draft - Compact Denial of Existence in DNSSEC
-
-## Loosely Based Upon
-
-- ldns - <https://nlnetlabs.nl/projects/ldns/about/>
-- NSD - <https://nlnetlabs.nl/projects/nsd/about/>
-- Net::DNS - <http://www.net-dns.org/>
-- GRONG - <https://github.com/bortzmeyer/grong>
+BSD-3-Clause, inherited from `miekg/dns`. See `LICENSE` and `COPYRIGHT`.
