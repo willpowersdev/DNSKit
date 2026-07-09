@@ -118,4 +118,35 @@ final class ServerTests: XCTestCase {
         try await client.shutdown()
         try await server.shutdown()
     }
+
+    /// One TCP connection, many queries — no per-query connect/close.
+    func testPersistentConnectionReuseTCP() async throws {
+        let mux = ServeMux()
+        mux.register(Name("example.com."), HandlerFunc { request, _ in
+            var reply = request.makeReply()
+            let name = request.questions.first?.name ?? Name("example.com.")
+            reply.answers = [A(header: RRHeader(name: name, type: .a, ttl: 60), a: IPv4Address("192.0.2.5"))]
+            return reply
+        })
+        let server = DNSServer(responder: mux)
+        try await server.start()
+        let port = await server.boundPort!
+
+        let client = DNSClient()
+        let connection = try await client.connect(to: "127.0.0.1", port: port, transport: .tcp,
+                                                  timeout: .seconds(2))
+        // Three distinct queries reuse the same connection; each reply must
+        // carry its own id back.
+        for i in 0..<3 {
+            let query = Msg(header: MsgHeader(id: UInt16(1000 + i)),
+                            questions: [Question(Name("host\(i).example.com."), .a)])
+            let reply = try await connection.exchange(query, timeout: .seconds(2))
+            XCTAssertEqual(reply.header.id, UInt16(1000 + i))
+            XCTAssertEqual((reply.answers.first as? A)?.a.description, "192.0.2.5")
+        }
+
+        await connection.close()
+        try await client.shutdown()
+        try await server.shutdown()
+    }
 }
