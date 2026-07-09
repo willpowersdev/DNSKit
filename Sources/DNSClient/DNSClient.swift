@@ -72,6 +72,39 @@ public final class DNSClient: Sendable {
         return reply
     }
 
+    /// Performs a zone transfer (AXFR by default) over TCP, reading the stream
+    /// of response messages until the closing SOA, and returns all answer
+    /// records in order (including the leading and trailing SOA).
+    public func transfer(zone: String, type: RRType = .axfr, server: String, port: Int = 53,
+                        timeout: TimeAmount = .seconds(30)) async throws -> [any RR] {
+        let address = try resolve(host: server, port: port)
+        let query = Msg(header: MsgHeader(id: UInt16.random(in: 0...UInt16.max)),
+                        questions: [Question(Name(zone).fqdn, type)])
+        let request = try query.pack()
+
+        let loop = group.next()
+        let promise = loop.makePromise(of: [any RR].self)
+        let channel = try await ClientBootstrap(group: group)
+            .channelInitializer { ch in ch.pipeline.addHandler(ZoneTransferHandler(promise: promise)) }
+            .connect(to: address).get()
+
+        let timeoutTask = channel.eventLoop.scheduleTask(in: timeout) { promise.fail(DNSClientError.timeout) }
+        var out = channel.allocator.buffer(capacity: request.count + 2)
+        out.writeInteger(UInt16(request.count))
+        out.writeBytes(request)
+        do {
+            try await channel.writeAndFlush(out).get()
+            let records = try await promise.futureResult.get()
+            timeoutTask.cancel()
+            try? await channel.close().get()
+            return records
+        } catch {
+            timeoutTask.cancel()
+            try? await channel.close().get()
+            throw error
+        }
+    }
+
     // MARK: Wire exchange
 
     private func exchangeRaw(query: [UInt8], to server: SocketAddress,
@@ -141,6 +174,57 @@ private final class UDPResponseHandler: ChannelInboundHandler {
         guard !completed else { return }
         completed = true
         promise.fail(error)
+        context.close(promise: nil)
+    }
+}
+
+/// Reads a stream of 2-byte length-prefixed messages for a zone transfer,
+/// accumulating answer records until the closing SOA (the second SOA seen).
+private final class ZoneTransferHandler: ChannelInboundHandler {
+    typealias InboundIn = ByteBuffer
+    private let promise: EventLoopPromise<[any RR]>
+    private var acc: [UInt8] = []
+    private var collected: [any RR] = []
+    private var soaCount = 0
+    private var completed = false
+    init(promise: EventLoopPromise<[any RR]>) { self.promise = promise }
+
+    func channelRead(context: ChannelHandlerContext, data: NIOAny) {
+        guard !completed else { return }
+        var buf = unwrapInboundIn(data)
+        acc.append(contentsOf: buf.readBytes(length: buf.readableBytes) ?? [])
+
+        while acc.count >= 2 {
+            let length = Int(acc[0]) << 8 | Int(acc[1])
+            guard acc.count >= 2 + length else { break }
+            let frame = Array(acc[2..<2 + length])
+            acc.removeFirst(2 + length)
+            do {
+                let msg = try Msg(unpacking: frame)
+                for rr in msg.answers {
+                    collected.append(rr)
+                    if rr.header.type == .soa { soaCount += 1 }
+                }
+            } catch {
+                finish(context: context) { self.promise.fail(error) }
+                return
+            }
+            if soaCount >= 2 {  // leading + trailing SOA => transfer complete
+                let records = collected
+                finish(context: context) { self.promise.succeed(records) }
+                return
+            }
+        }
+    }
+
+    func errorCaught(context: ChannelHandlerContext, error: Error) {
+        finish(context: context) { self.promise.fail(error) }
+    }
+
+    private func finish(context: ChannelHandlerContext, _ resolve: () -> Void) {
+        guard !completed else { return }
+        completed = true
+        resolve()
         context.close(promise: nil)
     }
 }

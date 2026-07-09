@@ -270,6 +270,24 @@ func main() {
 		"secretHex": hx(tsecret),
 		"wire":      hex.EncodeToString(tsigWire),
 	})
+
+	// Dynamic UPDATE (RFC 2136): build with miekg, pack uncompressed. The Swift
+	// DNSUpdate builder must produce identical bytes.
+	upd := new(dns.Msg)
+	upd.SetUpdate("example.com.")
+	upd.Id = 0x1234
+	upd.NameUsed([]dns.RR{&dns.A{Hdr: rh("must.example.com.", dns.TypeA, 0)}})
+	upd.Insert([]dns.RR{&dns.A{Hdr: rh("host.example.com.", dns.TypeA, 3600), A: net.ParseIP("192.0.2.10")}})
+	upd.RemoveRRset([]dns.RR{&dns.TXT{Hdr: rh("old.example.com.", dns.TypeTXT, 0)}})
+	upd.RemoveName([]dns.RR{&dns.A{Hdr: rh("gone.example.com.", dns.TypeA, 0)}})
+	upd.Compress = false
+	updWire, err := upd.Pack()
+	if err != nil {
+		panic(err)
+	}
+	writeJSON("Tests/DNSTypesTests/oracle_update.json", map[string]string{
+		"wire": hex.EncodeToString(updWire),
+	})
 }
 
 func packMsg(m *dns.Msg) map[string]string {

@@ -98,6 +98,7 @@ public struct RRClass: RawRepresentable, Hashable, Sendable {
     public static let `in` = RRClass(rawValue: 1)
     public static let ch = RRClass(rawValue: 3)
     public static let hs = RRClass(rawValue: 4)
+    public static let none = RRClass(rawValue: 254)
     public static let any = RRClass(rawValue: 255)
 }
 

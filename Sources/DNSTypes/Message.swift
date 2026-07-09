@@ -1,5 +1,13 @@
 import DNSCore
 
+/// DNS opcodes (RFC 1035 §4.1.1 and successors).
+public enum Opcode {
+    public static let query = 0
+    public static let status = 2
+    public static let notify = 4
+    public static let update = 5
+}
+
 /// A DNS message header (RFC 1035 §4.1.1). Flag bits mirror the Go `MsgHdr`.
 public struct MsgHeader: Sendable, Equatable {
     public var id: UInt16
