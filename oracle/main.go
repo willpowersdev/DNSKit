@@ -3,7 +3,8 @@
 // packed with compression DISABLED so the bytes depend only on the per-type
 // rdata codec (compression is unit-tested separately on the Swift side).
 //
-// Run: go run ./oracle > Tests/DNSTypesTests/oracle.json
+// Run from the oracle directory: cd oracle && go run .
+// It fetches upstream miekg/dns (see go.mod) and writes vectors under ../Tests.
 package main
 
 import (
@@ -107,7 +108,7 @@ func main() {
 	https.Value = []dns.SVCBKeyValue{&dns.SVCBAlpn{Alpn: []string{"h3"}}}
 	out["HTTPS"] = hexOf(https)
 
-	writeJSON("Tests/DNSTypesTests/oracle.json", out)
+	writeJSON("../Tests/DNSTypesTests/oracle.json", out)
 
 	// Full messages: emit both compressed and uncompressed wire bytes. The
 	// Swift side compares uncompressed bytes exactly (well-defined) and checks
@@ -145,7 +146,7 @@ func main() {
 		"query":    packMsg(query),
 		"response": packMsg(resp),
 	}
-	writeJSON("Tests/DNSTypesTests/oracle_messages.json", msgs)
+	writeJSON("../Tests/DNSTypesTests/oracle_messages.json", msgs)
 
 	// Zone-file (presentation) lines: parse with miekg, pack uncompressed. The
 	// Swift side parses the same line and must produce identical wire bytes.
@@ -189,7 +190,7 @@ func main() {
 		}
 		zone = append(zone, zoneVec{Line: line, Hex: hex.EncodeToString(buf[:off])})
 	}
-	writeJSON("Tests/DNSTypesTests/oracle_zone.json", zone)
+	writeJSON("../Tests/DNSTypesTests/oracle_zone.json", zone)
 
 	// DNSSEC: generate a key per algorithm, sign an A RRset, and emit the
 	// DNSKEY/RRSIG/RRset/DS wire bytes + key tag. The Swift side reconstructs
@@ -254,7 +255,7 @@ func main() {
 		Alg: dns.ECDSAP256SHA256, Dnskey: hexOf(mxKey), Rrsig: hexOf(mxSig),
 		Rrset: []string{hexOf(mx1), hexOf(mx2)}, Ds: hexOf(mxKey.ToDS(dns.SHA256)), KeyTag: mxKey.KeyTag(),
 	})
-	writeJSON("Tests/DNSSECTests/oracle_dnssec.json", dvecs)
+	writeJSON("../Tests/DNSSECTests/oracle_dnssec.json", dvecs)
 
 	// TSIG: sign a query with miekg and emit the wire bytes + key.
 	tmsg := new(dns.Msg)
@@ -266,7 +267,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	writeJSON("Tests/DNSSECTests/oracle_tsig.json", map[string]string{
+	writeJSON("../Tests/DNSSECTests/oracle_tsig.json", map[string]string{
 		"keyName":   "test.key.",
 		"algorithm": dns.HmacSHA256,
 		"secretHex": hx(tsecret),
@@ -287,13 +288,13 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	writeJSON("Tests/DNSTypesTests/oracle_update.json", map[string]string{
+	writeJSON("../Tests/DNSTypesTests/oracle_update.json", map[string]string{
 		"wire": hex.EncodeToString(updWire),
 	})
 
 	// NSEC3 hashing (RFC 5155): miekg's HashName returns the base32hex hash.
 	nsec3 := dns.HashName("host.example.com.", dns.SHA1, 12, "aabbccdd")
-	writeJSON("Tests/DNSSECTests/oracle_nsec3.json", map[string]string{
+	writeJSON("../Tests/DNSSECTests/oracle_nsec3.json", map[string]string{
 		"name":       "host.example.com.",
 		"saltHex":    "aabbccdd",
 		"iterations": "12",
